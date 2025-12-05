@@ -1,0 +1,13 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+/.claude/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+app/libs/com/google/
+app/libs/com/pomelo/

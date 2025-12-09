@@ -6,11 +6,7 @@ Construido sobre el **Google Pay TapAndPay SDK**, ofrece **UI Components** pre-d
 automática de tarjetas.
 
 <div align="center">
-
-|          Botón Normal          |          Badge Compacto           |               Ya en Wallet                |               Demo                |
-|:------------------------------:|:---------------------------------:|:-----------------------------------------:|:---------------------------------:|
-| <img src="docs/home.png" height="400"> | <img src="docs/home_badge.png" height="400"> | <img src="docs/home_alreadyinwallet.png" height="400"> | <video src="https://github.com/user-attachments/assets/b058c0a0-1e81-4f65-830e-f7af2a644694" height="100" controls></video> |
-
+<video src="https://github.com/user-attachments/assets/b058c0a0-1e81-4f65-830e-f7af2a644694" height="100" controls></video>
 </div>
 
 ## Requisitos

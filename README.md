@@ -1,10 +1,13 @@
+# Pomelo SDK: Push Provisioning
 
 El módulo **pushprovisioning** es una biblioteca de Android SDK desarrollada por Pomelo que permite integrar la funcionalidad de **Push Provisioning** de Google Pay en aplicaciones Android.
-
 
 Construido sobre el **Google Pay TapAndPay SDK**, ofrece **UI Components** pre-diseñados para Jetpack Compose que facilitan la integración. El módulo incluye **soporte multi-red** para Visa y Mastercard, proporcionando una experiencia de usuario fluida y segura para la tokenización
 automática de tarjetas.
 
+|          Botón Normal          |          Badge Compacto           |               Ya en Wallet                |
+|:------------------------------:|:---------------------------------:|:-----------------------------------------:|
+| ![Botón Normal](docs/home.png) | ![Badge Compacto](docs/home_badge.png) | ![Ya en Wallet](docs/home_alreadyinwallet.png) |
 
 ## Requisitos
 

@@ -13,8 +13,8 @@ class CardsRepository {
       listOf(
           CardDto(
               cardId = "crd-123",
-              userId = "usr-001",
-              lastFour = "1234",
+              userId = "usr-123",
+              lastFour = "5987",
               cardholderName = "Juan Pérez",
               brand = Brand.VISA,
           ),

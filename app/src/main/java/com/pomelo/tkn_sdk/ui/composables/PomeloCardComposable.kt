@@ -38,8 +38,8 @@ import com.pomelo.tkn_sdk.data.model.CardDto
 
 private fun getImageUrlForBrand(brand: Brand): String =
     when (brand) {
-      Brand.MASTERCARD -> "file:///android_asset/asset_card_1.png"
-      Brand.VISA -> "file:///android_asset/asset_card_2.png"
+      Brand.VISA -> "file:///android_asset/asset_card_1.png"
+      Brand.MASTERCARD -> "file:///android_asset/asset_card_2.png"
     }
 
 @Composable

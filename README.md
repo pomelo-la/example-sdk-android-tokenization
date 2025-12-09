@@ -178,10 +178,6 @@ sequenceDiagram
       App ->> User: Notify success
 ```
 
-
-![Secuencia_SDK___Mermaid_Chart-2025-08-22-143701.png](https://storage.googleapis.com/dashboard-51ba6.appspot.com/0ca31b4b2e37c678d07f3aed65820828.png?GoogleAccessId=firebase-adminsdk-jd298%40dashboard-51ba6.iam.gserviceaccount.com&Expires=16725225600&Signature=e%2BBhHGhzZHZ2ZqjOp5i0nvb53GoM0bWYLZW1FR5JSNcF6baJAd4rPPkzM6SBq5mqHjtSNzwcUI28hsSDFFnOTiVuW6vUCzY%2FDHj3E%2FvGDvQyFOTGsyL6fdkEubf%2Budgr2%2Fr%2FQU2cw2J6H0HwjgZifyet6Fgwd1glDUoS9OhitHYDQb3PHhLWh7bHFZqKr82rsU7Cu4VD3cONGXbLM2OjypaLC8Ik3qQgdqOo9mgnceKrRSstuWvW5Qgf05yJA5NzjIpb2MzADf2zSMJ4W1RsdueF2lBOZVXDDVON9CYl1NUT35GEOPxUcmPRiugRZh1nLD6m4m4zfNlRquP6p7XM1Q%3D%3D)
-
-
 ### Parámetros de Inicialización
 
 
@@ -323,8 +319,21 @@ El flujo de autenticación sigue estos pasos:
 3. **Generación segura del EUT**: Con el Bearer token, el BFF solicita la generación del EUT, que contiene los datos cifrados necesarios para la tokenización
 4. **Retorno seguro a la app**: El EUT se envía de forma segura a la aplicación móvil para completar el proceso de tokenización
 
-![EUT___Mermaid_Chart-2025-08-22-134539.png](https://storage.googleapis.com/dashboard-51ba6.appspot.com/adef2614afa2450583c1034f6e1112fc.png?GoogleAccessId=firebase-adminsdk-jd298%40dashboard-51ba6.iam.gserviceaccount.com&Expires=16725225600&Signature=kTZv1PXfZ6RaiMjamyMIwW%2Foq5SvtCzx7ebxwbEPrG5lEKOHMhR2BoQE9EnH9dGbAdnydkK01Q%2FmRCeW3BRj9Gyk0Ih6UU9cyot8zdaqG5pm4KJN5Zzgwh4hXYvnuRgqekoPgLYm1vACKswE9tz51hy5HTjZlUJQtlmawQEc%2FX625bl%2F%2F3ExM4bFb6fokp5YLwkbwzHDx7aQ3Mxsy2H39GHzADTd2%2FCRXwxm5A2wU2wExJwjHqvX3VHJD0l984iUzDotELFEg7WxtS9BtpjPRpU%2FuRIYe09%2FR07pN76W5qQfsfy6SWBr%2FIh6nhy8yNQj3twdya5ZNlbgRjCtuTPHOA%3D%3D)
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant BFF as BFF
+  participant Pomelo as Pomelo API
 
+  autonumber
+  App ->> BFF: Request authProvider
+  Note right of BFF: Prepares to authenticate with Pomelo
+  BFF ->> Pomelo: [POST] /oauth/token
+  Pomelo -->> BFF: Returns Bearer token
+  BFF ->> Pomelo: [POST] /secure-data/v1/token
+  Pomelo -->> BFF: Returns EUT (End User Token)
+  BFF ->> App: Responds with EUT
+```
 
 ### Control de Logs
 

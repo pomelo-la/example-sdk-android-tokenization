@@ -387,3 +387,65 @@ adb logcat -s "PushProvisioning:ViewModel" -s "PushProvisioning:HTTP"
 adb logcat PushProvisioning:ViewModel:D *:S  # Solo DEBUG del ViewModel
 ```
 
+## Troubleshooting
+
+Antes de comenzar a debuggear cualquier problema, asegurate de:
+
+1. **Habilitar los logs del SDK**: Configura `enableLogging = true` al inicializar el SDK:
+```kotlin
+PomeloPushProvisioning.register(
+    context = this,
+    environment = PomeloEnvironment.STAGE,
+    enableLogging = true  // Habilitar para debugging
+)
+```
+
+2. **Solicitar acceso a logs completos de TapAndPay**: Por defecto los logs del SDK de TapAndPay vienen ofuscados. Para facilitar el debugging, solicita acceso a Google mediante el [formulario de acceso](https://developers.google.com/pay/issuers/apis/push-provisioning/android/support/troubleshooting#enable_logs_for_user).
+
+<details>
+<summary><b>El botón no se muestra luego de instalar y configurar el SDK</b></summary>
+
+La causa más probable es que el usuario no tenga acceso a interactuar con el SDK de TapAndPay. Para confirmar esto, revisa los logs:
+
+```
+2025-12-09 15:01:57.431 PushProvisioning:ViewModel  E  Handling error: TAP_AND_PAY_SDK
+    com.google.android.gms.common.api.ApiException: 15009: Calling package not verified|
+```
+
+**Solución**: Deberás solicitar el acceso al TapAndPay SDK directamente con Google. Consulta la [documentación de Push Provisioning API Access](https://developers.google.com/pay/issuers/apis/push-provisioning/android/allowlist).
+
+</details>
+
+<details>
+<summary><b>Error <code>OPC_GENERATION_FAILED</code> al hacer click en el botón</b></summary>
+
+Si en los logs aparece:
+
+```
+2025-12-09 15:05:06.232 PushProvisioning  E  Mapping error with explicit type: OPC_GENERATION_FAILED
+    retrofit2.HttpException: HTTP 401
+```
+
+**Solución**: Es muy probable que el método `authTokenProvider` esté retornando un token incorrecto. Revisa que el ambiente configurado sea el correcto (STAGE vs PRODUCTION).
+
+</details>
+
+<details>
+<summary><b>La App sigue mostrando el botón "Agregar a la Billetera de Google" después de tokenizar</b></summary>
+
+Si lograste tokenizar la tarjeta (por flujo manual o mediante push provisioning) pero la App sigue mostrando el botón, primero confirma que efectivamente la tarjeta se encuentre tokenizada.
+
+Una vez confirmado, revisa los logs:
+
+```
+2025-12-09 15:09:42.674 PushProvis...letManager  D  Getting token info for lastFour: 5678, brand: MASTERCARD
+2025-12-09 15:09:42.686 PushProvis...letManager  D  Token search result: not found
+2025-12-09 15:09:42.686 PushProvis...:ViewModel  D  No matching token found - setting state to ReadyToAddToWallet
+```
+
+Si ves un mensaje similar a `Token search result: not found`, significa que el método `listTokens` del TapAndPay SDK está devolviendo una lista vacía.
+
+**Solución**: Es muy probable que el package name del APK no coincida con el configurado en la bandera. Más información en la [documentación de Google sobre listTokens vacío](https://developers.google.com/pay/issuers/apis/push-provisioning/deprecated/android/support/troubleshooting#listtokens_is_returning_an_empty_list).
+
+</details>
+

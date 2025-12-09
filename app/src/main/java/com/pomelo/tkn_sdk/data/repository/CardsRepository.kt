@@ -12,9 +12,9 @@ class CardsRepository {
   private val hardcodedCards =
       listOf(
           CardDto(
-              cardId = "crd-123",
-              userId = "usr-001",
-              lastFour = "1234",
+              cardId = "crd-2swgPJIARl0pnWCCRuffA8QDYgq",
+              userId = "usr-22vFnkDAfDCsHnE4FC4l5gHpUf0",
+              lastFour = "5987",
               cardholderName = "Juan Pérez",
               brand = Brand.VISA,
           ),

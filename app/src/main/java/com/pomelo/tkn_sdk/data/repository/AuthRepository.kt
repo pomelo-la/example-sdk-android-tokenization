@@ -7,9 +7,22 @@ import kotlinx.coroutines.withContext
 
 class AuthRepository {
 
-    suspend fun getUserEndToken(userId: String): NetworkResult<String> =
-        withContext(Dispatchers.IO) {
-            delay(300)
-            NetworkResult.Success("DUMMY_TOKEN_$userId")
-        }
+  /**
+   * Example implementation - Replace with your actual backend call.
+   *
+   * This method currently returns a dummy token for demonstration purposes.
+   * You must replace this implementation with a real API call to your backend
+   * that returns a valid end-user token for the tokenization process.
+   *
+   * @param userId The user identifier to obtain the token for. Note: This parameter
+   *               is used for demonstration purposes only. Your actual implementation
+   *               may not require this parameter or may use different parameters
+   *               depending on your backend authentication requirements.
+   * @return NetworkResult containing the end-user token or an error.
+   */
+  suspend fun getUserEndToken(userId: String): NetworkResult<String> =
+      withContext(Dispatchers.IO) {
+        delay(300)
+        NetworkResult.Success("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Ilh0WmtqMEUyZl9HN0UzMi1acy1NdSJ9.eyJodHRwczovL3BvbWVsby5sYS9jbGllbnRfaWQiOiJjbGktMm9ualpvbVg4NFpuSzg1MjJJUlJuSnhDcFNLIiwiaXNzIjoiaHR0cHM6Ly9wb21lbG8tcHJvZC51cy5hdXRoMC5jb20vIiwic3ViIjoiUE83VkJ2MVRwQjVHSVRVbmNuUmNtY3lJQzJlUTFjczBAY2xpZW50cyIsImF1ZCI6Imh0dHBzOi8vYXV0aC1wcm9kLnBvbWVsby5sYSIsImlhdCI6MTc2NTI5MTExNiwiZXhwIjoxNzY1Mzc3NTE2LCJzY29wZSI6ImNobDpjYXJkcyB1c2VyczpnZXQtdXNlciB1c2Vyczp1cGRhdGUtdXNlciB1c2VyczpzZWFyY2gtdXNlciB1c2VyczpjcmVhdGUtdXNlciBjYXJkczpjcmVhdGUtY2FyZCBjYXJkczpnZXQtY2FyZCBjYXJkczphY3RpdmF0ZS1jYXJkIGNhcmRzOmNyZWF0ZS1iYXRjaCBjYXJkczpzZWFyY2gtY2FyZCBjYXJkczp1cGRhdGUtY2FyZCBzaGlwbWVudDpnZXQtc2hpcG1lbnQgc2hpcG1lbnQ6Z2V0LXNoaXBtZW50LWhpc3Rvcnkgc2hpcG1lbnQ6Y3JlYXRlLXNoaXBtZW50IHNoaXBtZW50OnNlYXJjaC1zaGlwbWVudCBzaGlwbWVudDp1cGRhdGUtc2hpcG1lbnQgc2hpcG1lbnQ6dXBkYXRlLXNoaXBtZW50LWluZm8gc2hpcG1lbnQ6cmVxdWVzdC1zaGlwbWVudC1yZWNlaXZlci1kYXRhIGFyZzppZGVudGl0eTpjcmVhdGUtc2Vzc2lvbiBhcmc6aWRlbnRpdHk6Y2FuY2VsLXNlc3Npb24gYXJnOmlkZW50aXR5OmdldC1zZXNzaW9uIGFyZzppZGVudGl0eTpzZWFyY2gtc2Vzc2lvbnMgYXJnOmlkZW50aXR5OmdldC1yZXBvcnQgaXNzdWluZy1jb25maWc6Y3JlYXRlLXByb2R1Y3QgaXNzdWluZy1jb25maWc6Z2V0LXByb2R1Y3QgaXNzdWluZy1jb25maWc6dXBkYXRlLXByb2R1Y3QgaXNzdWluZy1jb25maWc6c2VhcmNoLXByb2R1Y3QgaXNzdWluZy1jb25maWc6Z2V0LWFmZmluaXR5LWdyb3VwIGlzc3VpbmctY29uZmlnOnNlYXJjaC1hZmZpbml0eS1ncm91cCBhcmc6aWRlbnRpdHkgaWRlbnRpdHk6Y3JlYXRlLXNlc3Npb24gaWRlbnRpdHk6Y2FuY2VsLXNlc3Npb24gaWRlbnRpdHk6Z2V0LXNlc3Npb24gaWRlbnRpdHk6c2VhcmNoLXNlc3Npb25zIGlkZW50aXR5OmdldC1yZXBvcnQgaWRlbnRpdHk6dXBkYXRlLXNlc3Npb24gY29yZTphc3NvY2lhdGUtY2FyZCBjb3JlOnNlYXJjaC1hc3NvY2lhdGlvbiBjaGw6Y29yZSBjb3JlOmNyZWF0ZS1hY2NvdW50IGNvcmU6dXBkYXRlLWFjY291bnQgY29yZTpkZWxldGUtYWNjb3VudCBjb3JlOmxpc3QtYWNjb3VudHMgY29yZTpjcmVhdGUtY2xpZW50LXR4IGNvcmU6bGlzdC1hY3Rpdml0aWVzIEJyYTppZGVudGl0eSBpZGVudGl0eTpjcmVhdGUtY3VzdG9tLXNlc3Npb25zIGNvbXBhbmllczpzZWFyY2gtY29tcGFueSB2dHMtY29ubmVjdG9yOmFwcGxlLXByb3Zpc2lvbmluZy1wZXJtaXNzaW9uIHZ0cy1jb25uZWN0b3I6Z29vZ2xlLXByb3Zpc2lvbmluZy1wZXJtaXNzaW9uIGNhcmQtdHhuczpnZXQtdHhucyBjb21wYW5pZXM6Y3JlYXRlLWNvbXBhbnkgdGhyZWVkcy1jb25uZWN0b3I6c2VuZC1vdHAgbWRlcy1jb25uZWN0b3I6Z2VuZXJhdGUtZ29vZ2xlLXByb3Zpc2lvbmluZy1kYXRhIiwiZ3R5IjoiY2xpZW50LWNyZWRlbnRpYWxzIiwiYXpwIjoiUE83VkJ2MVRwQjVHSVRVbmNuUmNtY3lJQzJlUTFjczAifQ.FpRhjUNiaKeEOAMXt9Z3LVhIKi1XRK6dRSXJGqHt2CbBE6wRU4XNfr5FrXeYYYe7vF0evkCkvezwIy7_alTTfc82E4iOKA-wV6CDxx52N-n--Al7nFkQ3qxAUwm2ijRoTO9qsuoTjCMJxra11TgJlXEivEP4rAbd4BXzTkkMNWjSrCUGtdpxXxdE_l3yzjt9GG65-0XvBEQwBbXMLMfLsWZt5cmLs8odyc9Bnaupvbg0ByHWhpGg__CTDKxH8ezd5xsHSyuIGMkV6VE8OS8WXH_su9FSJVCkABK2NG2ak_-c-Zr10fYSVnDIm6iipp6kZQNPIBqXGmzzWoIm1DZeSg")
+      }
 }

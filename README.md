@@ -9,7 +9,7 @@ automática de tarjetas.
 
 |          Botón Normal          |          Badge Compacto           |               Ya en Wallet                |               Demo                |
 |:------------------------------:|:---------------------------------:|:-----------------------------------------:|:---------------------------------:|
-| <img src="docs/home.png" height="400"> | <img src="docs/home_badge.png" height="400"> | <img src="docs/home_alreadyinwallet.png" height="400"> | <video src="docs/demo.mp4" height="400" controls></video> |
+| <img src="docs/home.png" height="400"> | <img src="docs/home_badge.png" height="400"> | <img src="docs/home_alreadyinwallet.png" height="400"> | <video src="https://github.com/user-attachments/assets/b058c0a0-1e81-4f65-830e-f7af2a644694" height="400" controls></video> |
 
 </div>
 

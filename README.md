@@ -5,9 +5,13 @@ El módulo **pushprovisioning** es una biblioteca de Android SDK desarrollada po
 Construido sobre el **Google Pay TapAndPay SDK**, ofrece **UI Components** pre-diseñados para Jetpack Compose que facilitan la integración. El módulo incluye **soporte multi-red** para Visa y Mastercard, proporcionando una experiencia de usuario fluida y segura para la tokenización
 automática de tarjetas.
 
-|          Botón Normal          |          Badge Compacto           |               Ya en Wallet                |
-|:------------------------------:|:---------------------------------:|:-----------------------------------------:|
-| ![Botón Normal](docs/home.png) | ![Badge Compacto](docs/home_badge.png) | ![Ya en Wallet](docs/home_alreadyinwallet.png) |
+<div align="center">
+
+|          Botón Normal          |          Badge Compacto           |               Ya en Wallet                |               Demo                |
+|:------------------------------:|:---------------------------------:|:-----------------------------------------:|:---------------------------------:|
+| <img src="docs/home.png" height="400"> | <img src="docs/home_badge.png" height="400"> | <img src="docs/home_alreadyinwallet.png" height="400"> | <video src="docs/demo.mp4" height="400" controls></video> |
+
+</div>
 
 ## Requisitos
 
@@ -148,6 +152,31 @@ fun MyCardScreen(viewModel: HomeViewModel = viewModel()) {
 
 
 ## Documentación de API
+
+```mermaid
+sequenceDiagram
+      actor User as User
+      participant App as App
+      participant SDK as SDK
+      participant PomeloAPI as Pomelo API
+      participant BFF as Backend APP (BFF)
+
+      autonumber
+      User ->> App: Click on GPayButton
+      App ->> SDK: Start push provisioning flow
+      SDK ->> App: Call authTokenProvider()
+      App ->> BFF: Get EndUserToken (EUT)
+      BFF -->> App: EUT
+      App -->> SDK: EUT
+      SDK ->> PomeloAPI: Generate OPC
+      PomeloAPI -->> SDK: OPC data
+      SDK ->> App: Launch Google Wallet Activity
+      App ->> User: Show Google Wallet UI
+      User ->> App: Complete Google Wallet flow
+      App ->> SDK: Tokenization result
+      SDK ->> App: Emit GPayEffect.TokenizationCompleted
+      App ->> User: Notify success
+```
 
 
 ![Secuencia_SDK___Mermaid_Chart-2025-08-22-143701.png](https://storage.googleapis.com/dashboard-51ba6.appspot.com/0ca31b4b2e37c678d07f3aed65820828.png?GoogleAccessId=firebase-adminsdk-jd298%40dashboard-51ba6.iam.gserviceaccount.com&Expires=16725225600&Signature=e%2BBhHGhzZHZ2ZqjOp5i0nvb53GoM0bWYLZW1FR5JSNcF6baJAd4rPPkzM6SBq5mqHjtSNzwcUI28hsSDFFnOTiVuW6vUCzY%2FDHj3E%2FvGDvQyFOTGsyL6fdkEubf%2Budgr2%2Fr%2FQU2cw2J6H0HwjgZifyet6Fgwd1glDUoS9OhitHYDQb3PHhLWh7bHFZqKr82rsU7Cu4VD3cONGXbLM2OjypaLC8Ik3qQgdqOo9mgnceKrRSstuWvW5Qgf05yJA5NzjIpb2MzADf2zSMJ4W1RsdueF2lBOZVXDDVON9CYl1NUT35GEOPxUcmPRiugRZh1nLD6m4m4zfNlRquP6p7XM1Q%3D%3D)

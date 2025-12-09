@@ -14,6 +14,7 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     PomeloPushProvisioning.register(
         context = this,
+        environment = PomeloEnvironment.STAGE,
         enableLogging = true,
     )
 

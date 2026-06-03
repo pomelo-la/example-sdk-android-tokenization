@@ -5,5 +5,5 @@ sealed interface PushProvisioningResult {
 
     data class Cancelled(val statusCode: Int?) : PushProvisioningResult
 
-    data class Error(val statusCode: Int?, val message: String) : PushProvisioningResult
+    data class Error(val message: String, val statusCode: Int?) : PushProvisioningResult
 }

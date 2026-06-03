@@ -64,6 +64,8 @@ class PomeloCredentialsGenerator(
         return futureTask
     }
 
+    override fun getAuxiliaryOpaquePaymentCardSupported() = false
+
     /** Signals that this sample provides a Google OPC for saving the FPAN to the Google Account. */
     override fun getGoogleOpaquePaymentCardSupported(): Boolean = true
 }

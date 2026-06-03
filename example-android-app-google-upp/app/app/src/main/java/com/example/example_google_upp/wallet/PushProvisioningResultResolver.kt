@@ -43,71 +43,38 @@ object PushProvisioningResultResolver {
         }
         logPushTokenizeResult(activityResultCode, pushTokenizeResult)
 
-        val result =
-            if (pushTokenizeResult != null) {
-                resolvePushTokenizeResult(pushTokenizeResult)
-            } else {
-                missingPushTokenizeResultError(activityResultCode)
-            }
+        if (pushTokenizeResult == null) {
+            return PushProvisioningResult.Error(
+                "Google Wallet provisioning did not return Tap And Pay details",
+                statusCode = null,
+            )
+        }
 
-        logDebug("Resolved push provisioning result=${result.toLogValue()}")
-        return result
+        return resolveOutcomes(pushTokenizeResult.tokenizationOutcomes)
     }
 
-    private fun resolvePushTokenizeResult(
-        pushTokenizeResult: PushTokenizeResult
-    ): PushProvisioningResult {
-        val cardProvisioningResult =
-            resolveCardResult(pushTokenizeResult.cardResult, pushTokenizeResult.cardStatus)
-
-        return cardProvisioningResult
-            ?: resolveTokenizationOutcome(pushTokenizeResult.tokenizationOutcomes)
-    }
-
-    private fun missingPushTokenizeResultError(activityResultCode: Int): PushProvisioningResult.Error =
-        PushProvisioningResult.Error(
-            statusCode = activityResultCode,
-            message = "Google Wallet provisioning did not return Tap And Pay details",
-        )
-
-    /**
-     * Returns a failure for FPAN save errors, or null when tokenization should decide the result.
-     */
-    private fun resolveCardResult(cardResult: Boolean, cardStatus: Int): PushProvisioningResult? {
-        if (cardResult) return null
-
-        return resolveFailedStatus(cardStatus)
-    }
-
-    /** Reads the tokenization outcome that reports whether the card token was provisioned. */
-    private fun resolveTokenizationOutcome(
-        outcomes: List<TokenizationOutcome>
-    ): PushProvisioningResult {
+    /** Reads the tokenization outcomes that reports whether the card token was provisioned. */
+    private fun resolveOutcomes(outcomes: List<TokenizationOutcome>): PushProvisioningResult {
         val outcome =
             outcomes.firstOrNull()
                 ?: return PushProvisioningResult.Error(
+                    message = "Google Wallet provisioning failed",
                     statusCode = null,
-                    message = "Google Wallet provisioning did not return a tokenization outcome",
                 )
 
-        if (outcome.tokenResult) {
-            return PushProvisioningResult.Success
-        }
+        if (outcome.tokenResult) return PushProvisioningResult.Success
 
-        return resolveFailedStatus(outcome.tokenStatus)
-    }
-
-    private fun resolveFailedStatus(statusCode: Int): PushProvisioningResult =
-        when (statusCode) {
+        return when (outcome.tokenStatus) {
             TapAndPayStatusCodes.TAP_AND_PAY_USER_CANCELED_FLOW,
-            TapAndPayStatusCodes.CANCELED -> PushProvisioningResult.Cancelled(statusCode)
+            TapAndPayStatusCodes.CANCELED -> PushProvisioningResult.Cancelled(outcome.tokenStatus)
 
             else ->
                 PushProvisioningResult.Error(
-                    statusCode = statusCode,
-                    message = "Google Wallet provisioning failed (status=$statusCode)",
+                    statusCode = outcome.tokenStatus,
+                    message = "Google Wallet provisioning failed (status=$outcome.tokenStatus)",
                 )
         }
+    }
 
     private fun logPushTokenizeResult(
         activityResultCode: Int,
@@ -129,11 +96,4 @@ object PushProvisioningResultResolver {
     private fun logDebug(message: String) {
         runCatching { Log.d(TAG, message) }
     }
-
-    private fun PushProvisioningResult.toLogValue(): String =
-        when (this) {
-            PushProvisioningResult.Success -> "Success"
-            is PushProvisioningResult.Cancelled -> "Cancelled(statusCode=$statusCode)"
-            is PushProvisioningResult.Error -> "Error(statusCode=$statusCode, message=$message)"
-        }
 }

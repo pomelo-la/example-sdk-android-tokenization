@@ -1,51 +1,51 @@
 # backend-app
 
 > [!IMPORTANT]
-> This repository contains a basic example of a Google Tap And Pay SDK integration.
-> Use it as a reference sample only, and always validate the implementation details against the official documentation provided by Google.
-> Under no circumstances should the code in this repository be used in production.
+> Este repositorio contiene un ejemplo basico de una integracion con Google Tap And Pay SDK.
+> Usalo solo como muestra de referencia y valida siempre los detalles de implementacion con la documentacion oficial provista por Google.
+> Bajo ninguna circunstancia deberia usarse el codigo de este repositorio en produccion.
 
-Example backend for integrating Pomelo Push Provisioning with Google UPP from a Node.js/TypeScript service using Hono.
+Backend de ejemplo para integrar Pomelo Push Provisioning con Google UPP desde un servicio Node.js/TypeScript usando Hono.
 
-## Exposed Endpoints
+## Endpoints expuestos
 
 - `GET /cards/:id`
 - `GET /users/:id`
 - `POST /push-provisioning/mastercard/google-pay`
 - `POST /push-provisioning/visa/google-pay`
 
-## Environment Variables
+## Variables de entorno
 
-Required:
+Requeridas:
 
 - `POMELO_BASE_URL`
 - `POMELO_AUDIENCE`
 - `POMELO_CLIENT_ID`
 - `POMELO_CLIENT_SECRET`
 
-## Run Locally
+## Ejecutar localmente
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Build and Tests
+## Build y tests
 
 ```bash
 npm test
 npm run build
 ```
 
-## Examples
+## Ejemplos
 
-### Get Card
+### Obtener tarjeta
 
 ```bash
 curl "http://localhost:3000/cards/crd-123"
 ```
 
-Response:
+Respuesta:
 
 ```json
 {
@@ -57,13 +57,13 @@ Response:
 }
 ```
 
-### Get User
+### Obtener usuario
 
 ```bash
 curl "http://localhost:3000/users/usr-123"
 ```
 
-Response:
+Respuesta:
 
 ```json
 {
@@ -103,7 +103,7 @@ curl -X POST "http://localhost:3000/push-provisioning/mastercard/google-pay" \
   }'
 ```
 
-Response:
+Respuesta:
 
 ```json
 {
@@ -126,7 +126,7 @@ curl -X POST "http://localhost:3000/push-provisioning/visa/google-pay" \
   }'
 ```
 
-Response:
+Respuesta:
 
 ```json
 {

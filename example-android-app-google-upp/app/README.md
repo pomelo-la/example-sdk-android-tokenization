@@ -1,34 +1,34 @@
-# Example Google UPP Android app
+# Ejemplo de app Android con Google UPP
 
 > [!IMPORTANT]
-> This repository contains a basic example of a Google Tap And Pay SDK integration.
-> Use it as a reference sample only, and always validate the implementation details against the official documentation provided by Google.
-> Under no circumstances should the code in this repository be used in production.
+> Este repositorio contiene un ejemplo basico de una integracion con Google Tap And Pay SDK.
+> Usalo solo como muestra de referencia y valida siempre los detalles de implementacion con la documentacion oficial provista por Google.
+> Bajo ninguna circunstancia deberia usarse el codigo de este repositorio en produccion.
 
 
-This folder contains an Android sample app that demonstrates a Google Tap And Pay Push Provisioning integration. The focus is the client app flow: rendering the official Google Wallet button, checking tokenization state, launching `pushTokenize(...)`, generating Pomelo credentials, and resolving the result returned by Google Wallet.
+Esta carpeta contiene una app Android de ejemplo que demuestra una integracion con Google Tap And Pay Push Provisioning. El foco esta en el flujo de la app cliente: renderizar el boton oficial de Google Wallet, verificar el estado de tokenizacion, lanzar `pushTokenize(...)`, generar credenciales de Pomelo y resolver el resultado devuelto por Google Wallet.
 
-## Key pieces
+## Piezas clave
 
 ### GoogleWalletProvisionButton
 
-[GoogleWalletProvisionButton.kt](app/src/main/java/com/example/example_google_upp/components/GoogleWalletProvisionButton.kt) is the Compose entry point for rendering the official "Add to Google Wallet" button.
+[GoogleWalletProvisionButton.kt](app/src/main/java/com/example/example_google_upp/components/GoogleWalletProvisionButton.kt) es el punto de entrada en Compose para renderizar el boton oficial "Add to Google Wallet".
 
-The app uses the Provision Button API with programmatic integration through `ProvisionButton`. This avoids maintaining static button assets and lets the SDK own branding, localization, and scaling. The API supports two display modes: `PROVISION_BUTTON_DISPLAY_MODE_PRIMARY` and `PROVISION_BUTTON_DISPLAY_MODE_CONDENSED`; this sample uses `PRIMARY`.
+La app usa la Provision Button API con integracion programatica mediante `ProvisionButton`. Esto evita mantener assets estaticos del boton y le permite al SDK encargarse del branding, la localizacion y el escalado. La API soporta dos modos de visualizacion: `PROVISION_BUTTON_DISPLAY_MODE_PRIMARY` y `PROVISION_BUTTON_DISPLAY_MODE_CONDENSED`; este ejemplo usa `PRIMARY`.
 
-Official reference: [Provision Button API](https://developers.google.com/pay/issuers/apis/push-provisioning/android/provision-button-api)
+Referencia oficial: [Provision Button API](https://developers.google.com/pay/issuers/apis/push-provisioning/android/provision-button-api)
 
 ### MainActivity
 
-[MainActivity.kt](app/src/main/java/com/example/example_google_upp/MainActivity.kt) connects the Compose UI with the Tap And Pay flow. Its responsibilities are:
+[MainActivity.kt](app/src/main/java/com/example/example_google_upp/MainActivity.kt) conecta la UI de Compose con el flujo de Tap And Pay. Sus responsabilidades son:
 
-- Register `registerForActivityResult(...)` to listen for the Google Wallet Activity result.
-- Register `TapAndPay.DataChangedListener` to refresh local state when Wallet changes.
-- Revalidate eligibility in `onResume`, because Wallet state can change outside the app.
-- Request the push tokenization `PendingIntent` and launch it with `IntentSenderRequest`.
-- Delegate result interpretation to `PushProvisioningResultResolver`.
+- Registrar `registerForActivityResult(...)` para escuchar el resultado de la Activity de Google Wallet.
+- Registrar `TapAndPay.DataChangedListener` para refrescar el estado local cuando cambia Wallet.
+- Revalidar elegibilidad en `onResume`, porque el estado de Wallet puede cambiar fuera de la app.
+- Solicitar el `PendingIntent` de push tokenization y lanzarlo con `IntentSenderRequest`.
+- Delegar la interpretacion del resultado en `PushProvisioningResultResolver`.
 
-Official references:
+Referencias oficiales:
 
 - [Handling result callbacks](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#handling_result_callbacks)
 - [Data Change Callbacks](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#data_change_callbacks)
@@ -52,15 +52,15 @@ flowchart TD
 
 ### CardSearchViewModel.refreshWalletEligibility
 
-[CardSearchViewModel.kt](app/src/main/java/com/example/example_google_upp/ui/CardSearchViewModel.kt) owns the UI state for the selected card.
+[CardSearchViewModel.kt](app/src/main/java/com/example/example_google_upp/ui/CardSearchViewModel.kt) maneja el estado de UI de la tarjeta seleccionada.
 
-`refreshWalletEligibility()` synchronizes the Google Wallet button state. It is called after Wallet-relevant events such as `onResume`, `DataChangedListener` callbacks, and successful provisioning. The function cancels any previous check, calls `walletProvisioningGateway.isTokenized(card)`, and maps the result to the UI:
+`refreshWalletEligibility()` sincroniza el estado del boton de Google Wallet. Se llama despues de eventos relevantes para Wallet como `onResume`, los callbacks de `DataChangedListener` y un provisioning exitoso. La funcion cancela cualquier verificacion previa, llama a `walletProvisioningGateway.isTokenized(card)` y mapea el resultado a la UI:
 
 - `isTokenized == true` -> `WalletButtonState.ALREADY_ADDED`
 - `isTokenized == false` -> `WalletButtonState.READY_TO_ADD`
-- error while checking Tap And Pay -> `WalletButtonState.UNAVAILABLE`
+- error al verificar Tap And Pay -> `WalletButtonState.UNAVAILABLE`
 
-Tap And Pay documentation recommends updating the UI when the Activity returns to the foreground and when a data-change callback arrives.
+La documentacion de Tap And Pay recomienda actualizar la UI cuando la Activity vuelve al foreground y cuando llega un callback de cambio de datos.
 
 ```mermaid
 flowchart TD
@@ -78,34 +78,34 @@ flowchart TD
 
 ### TapAndPayService
 
-[TapAndPayService.kt](app/src/main/java/com/example/example_google_upp/wallet/TapAndPayService.kt) is the app gateway to `TapAndPayClient` and the issuer backend.
+[TapAndPayService.kt](app/src/main/java/com/example/example_google_upp/wallet/TapAndPayService.kt) es la puerta de entrada de la app hacia `TapAndPayClient` y el backend emisor.
 
-`isTokenized(card)` builds an `IsTokenizedRequest` with the card's last four digits, network, and token service provider. It returns `true` or `false` depending on whether Tap And Pay finds that card tokenized in the current device's Google Wallet.
+`isTokenized(card)` construye un `IsTokenizedRequest` con los ultimos cuatro digitos de la tarjeta, la red y el token service provider. Devuelve `true` o `false` segun si Tap And Pay encuentra esa tarjeta tokenizada en Google Wallet del dispositivo actual.
 
-Official reference: [isTokenized](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#istokenized)
+Referencia oficial: [isTokenized](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#istokenized)
 
-`createPushTokenizePendingIntent(card)` fetches the user from `BackendService`, builds the `UserAddress`, builds the `PushTokenizeRequest`, and calls `tapAndPayClient.pushTokenize(request)`. The request passes `PomeloCredentialsGenerator` as the `PaymentCredentialsGenerator`, which is the component Google Wallet invokes when it needs OPC credentials.
+`createPushTokenizePendingIntent(card)` obtiene el usuario desde `BackendService`, construye `UserAddress`, arma el `PushTokenizeRequest` y llama a `tapAndPayClient.pushTokenize(request)`. La solicitud pasa `PomeloCredentialsGenerator` como `PaymentCredentialsGenerator`, que es el componente que Google Wallet invoca cuando necesita credenciales OPC.
 
-Official reference: [pushTokenize](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#pushtokenize)
+Referencia oficial: [pushTokenize](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#pushtokenize)
 
 ### PomeloCredentialsGenerator
 
-[PomeloCredentialsGenerator.kt](app/src/main/java/com/example/example_google_upp/wallet/PomeloCredentialsGenerator.kt) implements Tap And Pay's `PaymentCredentialsGenerator` interface.
+[PomeloCredentialsGenerator.kt](app/src/main/java/com/example/example_google_upp/wallet/PomeloCredentialsGenerator.kt) implementa la interfaz `PaymentCredentialsGenerator` de Tap And Pay.
 
-Its responsibility is to generate issuer credentials when Google Wallet reaches the push tokenization step that requires OPC data. The `generate(request)` method receives a `GeneratePaymentCredentialsRequest` with Google-provided context:
+Su responsabilidad es generar credenciales del emisor cuando Google Wallet llega al paso de push tokenization que requiere datos OPC. El metodo `generate(request)` recibe un `GeneratePaymentCredentialsRequest` con contexto provisto por Google:
 
 - `serverSessionId`
 - `stableHardwareId`
 - `walletId`
 
-The app sends those values to Pomelo through `BackendService.getProvisioningData(...)` and uses the response to build a `GeneratePaymentCredentialsResponse` with:
+La app envia esos valores a Pomelo mediante `BackendService.getProvisioningData(...)` y usa la respuesta para construir un `GeneratePaymentCredentialsResponse` con:
 
 - `setOpaquePaymentCard(...)`
 - `setGoogleOpaquePaymentCard(...)`
 
-The implementation returns a `Future<GeneratePaymentCredentialsResponse>`, as expected by the SDK interface.
+La implementacion devuelve un `Future<GeneratePaymentCredentialsResponse>`, tal como espera la interfaz del SDK.
 
-Official references:
+Referencias oficiales:
 
 - [PaymentCredentialsGenerator interface](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#paymentcredentialsgenerator_interface)
 - [GeneratePaymentCredentialsRequest interface](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#generatepaymentcredentialsrequest_interface)
@@ -113,19 +113,19 @@ Official references:
 
 ### PushProvisioningResultResolver
 
-[PushProvisioningResultResolver.kt](app/src/main/java/com/example/example_google_upp/wallet/PushProvisioningResultResolver.kt) translates the Google Wallet result into the internal `PushProvisioningResult` model.
+[PushProvisioningResultResolver.kt](app/src/main/java/com/example/example_google_upp/wallet/PushProvisioningResultResolver.kt) traduce el resultado de Google Wallet al modelo interno `PushProvisioningResult`.
 
-`MainActivity` delegates the `activityResultCode` and `Intent` received from Google Wallet to this resolver. The resolver reads `TapAndPay.EXTRA_PUSH_TOKENIZE_RESULT` when available and returns one of three simple results so the `ViewModel` can update the UI:
+`MainActivity` delega en este resolver el `activityResultCode` y el `Intent` recibidos desde Google Wallet. El resolver lee `TapAndPay.EXTRA_PUSH_TOKENIZE_RESULT` cuando esta disponible y devuelve uno de tres resultados simples para que el `ViewModel` actualice la UI:
 
-- `Success`: tokenization succeeded.
-- `Cancelled`: Tap And Pay returned a cancellation status, such as `TAP_AND_PAY_USER_CANCELED_FLOW` or `CANCELED`.
-- `Error`: the Tap And Pay payload is missing, tokenization outcomes are missing, FPAN save failed, or any other error status was returned.
+- `Success`: la tokenizacion fue exitosa.
+- `Cancelled`: Tap And Pay devolvio un estado de cancelacion, como `TAP_AND_PAY_USER_CANCELED_FLOW` o `CANCELED`.
+- `Error`: falta el payload de Tap And Pay, faltan los resultados de tokenizacion, fallo el guardado de FPAN o se devolvio cualquier otro estado de error.
 
-This handler is intentionally basic for the sample app: it does not try to model advanced UI for every error code, it only distinguishes success, cancellation, and error.
+Este handler es intencionalmente basico para la app de ejemplo: no intenta modelar una UI avanzada para cada codigo de error, solo distingue entre exito, cancelacion y error.
 
-Official reference: [Sample code for pushTokenize(...)](https://developers.google.com/pay/issuers/apis/push-provisioning/android/upgrade_to_upp#sample_code_for_pushtokenize)
+Referencia oficial: [Sample code for pushTokenize(...)](https://developers.google.com/pay/issuers/apis/push-provisioning/android/upgrade_to_upp#sample_code_for_pushtokenize)
 
-## SDK references used by the app
+## Referencias del SDK usadas por la app
 
 - [Provision Button API](https://developers.google.com/pay/issuers/apis/push-provisioning/android/provision-button-api)
 - [isTokenized](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#istokenized)

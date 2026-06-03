@@ -1,16 +1,16 @@
-# Example Google UPP integration
+# Ejemplo de integracion con Google UPP
 
 > [!IMPORTANT]
-> This repository contains a basic example of a Google Tap And Pay SDK integration.
-> Use it as a reference sample only, and always validate the implementation details against the official documentation provided by Google.
-> Under no circumstances should the code in this repository be used in production.
+> Este repositorio contiene un ejemplo basico de una integracion con Google Tap And Pay SDK.
+> Usalo solo como muestra de referencia y valida siempre los detalles de implementacion con la documentacion oficial provista por Google.
+> Bajo ninguna circunstancia deberia usarse el codigo de este repositorio en produccion.
 
-This example is split into two parts:
+Este ejemplo se divide en dos partes:
 
-- [`app/`](app/README.md): Android sample app that integrates Google Tap And Pay Push Provisioning and launches the Google Wallet flow.
-- [`backend-app/`](backend-app/README.md): Node.js/TypeScript sample backend that exposes the card, user, and push-provisioning endpoints consumed by the Android app.
+- [`app/`](app/README.md): aplicacion de ejemplo para Android que integra Google Tap And Pay Push Provisioning y lanza el flujo de Google Wallet.
+- [`backend-app/`](backend-app/README.md): backend de ejemplo en Node.js/TypeScript que expone los endpoints de tarjeta, usuario y push provisioning consumidos por la app Android.
 
-## Repository structure
+## Estructura del repositorio
 
 ```text
 example-android-app-google-upp/
@@ -18,23 +18,23 @@ example-android-app-google-upp/
 └── backend-app/
 ```
 
-## How the example is organized
+## Como esta organizado el ejemplo
 
-The Android app demonstrates the client-side Tap And Pay integration:
+La app Android demuestra la integracion de Tap And Pay del lado cliente:
 
-- render the official Google Wallet button
-- check tokenization state
-- launch `pushTokenize(...)`
-- generate payment credentials through `PomeloCredentialsGenerator`
-- handle the result returned by Google Wallet
+- renderizar el boton oficial de Google Wallet
+- verificar el estado de tokenizacion
+- lanzar `pushTokenize(...)`
+- generar credenciales de pago mediante `PomeloCredentialsGenerator`
+- manejar el resultado devuelto por Google Wallet
 
-The backend app demonstrates the server-side piece required by the sample:
+La app backend demuestra la parte del servidor requerida por el ejemplo:
 
-- expose card and user lookup endpoints
-- expose push provisioning endpoints for Mastercard and Visa
-- proxy the provisioning request to Pomelo and return OPC data to the client flow
+- exponer endpoints de consulta de tarjeta y usuario
+- exponer endpoints de push provisioning para Mastercard y Visa
+- hacer proxy de la solicitud de provisioning hacia Pomelo y devolver datos OPC al flujo cliente
 
-## Read next
+## Segui leyendo
 
-- For the Android flow, diagrams, and SDK references, see [`app/README.md`](app/README.md).
-- For backend endpoints, environment variables, and local run instructions, see [`backend-app/README.md`](backend-app/README.md).
+- Para el flujo Android, los diagramas y las referencias del SDK, mira [`app/README.md`](app/README.md).
+- Para los endpoints backend, las variables de entorno y las instrucciones de ejecucion local, mira [`backend-app/README.md`](backend-app/README.md).

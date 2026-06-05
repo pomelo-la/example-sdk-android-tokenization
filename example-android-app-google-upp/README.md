@@ -34,6 +34,38 @@ La app backend demuestra la parte del servidor requerida por el ejemplo:
 - exponer endpoints de push provisioning para Mastercard y Visa
 - hacer proxy de la solicitud de provisioning hacia Pomelo y devolver datos OPC al flujo cliente
 
+## Diagrama de secuencia
+```mermaid
+sequenceDiagram
+    participant User as Tarjetahabiente
+    participant App as App Mobile
+    participant SDK as Tap And Pay SDK
+    participant Backend as Backend App
+    participant Pomelo as Pomelo
+
+    User->>App: Presiona el botón "Agregar a Billetera de Google"
+
+    Note over App: La app construye PushTokenizeRequest y configura PaymentCredentialsGenerator
+    App->>SDK: pushTokenize
+    SDK-->>App: Solicita las credenciales de pago
+    App->>Backend: Solicita OPCs para la tarjeta<br/>GeneratePaymentCredentialsRequest y datos de tokenización
+
+    Backend->>Pomelo: Solicita TSP OPC y Google OPC
+    Note over Pomelo: Genera TSP OPC y Google OPC
+    Pomelo-->>Backend: TSP OPC y Google OPC
+
+    Backend-->>App: TSP OPC y Google OPC
+    App-->>SDK: TSP OPC y Google OPC
+
+    Note over App: Espera onActivityResult
+    Note over SDK: Flujo de tokenización del dispositivo en Google Pay
+
+    SDK-->>App: Devuelve resultado de pushTokenize<br/>PushTokenizeResult y TokenizationOutcome
+    Note over App: Procesa el resultado
+    App-->>User: Muestra la confirmación
+
+```
+
 ## Segui leyendo
 
 - Para el flujo Android, los diagramas y las referencias del SDK, mira [`app/README.md`](app/README.md).

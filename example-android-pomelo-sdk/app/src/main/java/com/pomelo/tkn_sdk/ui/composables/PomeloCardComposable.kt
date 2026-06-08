@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
-import com.pomelo.sdk.pushprovisioning.ui.Brand
+import com.pomelo.sdk.pushprovisioning.model.Brand
 import com.pomelo.tkn_sdk.data.model.CardDto
 
 private fun getImageUrlForBrand(brand: Brand): String =

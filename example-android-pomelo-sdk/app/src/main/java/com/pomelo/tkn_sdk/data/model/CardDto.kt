@@ -1,6 +1,6 @@
 package com.pomelo.tkn_sdk.data.model
 
-import com.pomelo.sdk.pushprovisioning.ui.Brand
+import com.pomelo.sdk.pushprovisioning.model.Brand
 
 data class CardDto(
     val cardId: String,

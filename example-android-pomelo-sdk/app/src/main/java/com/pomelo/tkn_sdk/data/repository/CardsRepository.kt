@@ -1,6 +1,6 @@
 package com.pomelo.tkn_sdk.data.repository
 
-import com.pomelo.sdk.pushprovisioning.ui.Brand
+import com.pomelo.sdk.pushprovisioning.model.Brand
 import com.pomelo.tkn_sdk.data.model.CardDto
 import com.pomelo.tkn_sdk.util.NetworkResult
 import kotlinx.coroutines.Dispatchers

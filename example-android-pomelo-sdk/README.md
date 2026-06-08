@@ -11,12 +11,16 @@ automática de tarjetas.
 
 ## Requisitos
 
-- **Android SDK mínimo**: 21 (Android 5.0 Lollipop)
+- **Android SDK mínimo**: 23 (Android 6.0 Marshmallow)
 - **Android SDK Target**: 34 (Android 14)
 - **SDK Compile**: 35 (Android 15)
 - **Kotlin**: Compatible con versión 2.0.20+
 - **Gradle**: Versión 8.6+
 - **Java Version**: 1.8
+- **Jetpack Compose BOM**: 2024.09.00+
+
+> [!WARNING]
+> Este SDK fue desarrollado exclusivamente para Android nativo y no ha sido testeado en frameworks híbridos como Flutter o React Native. Para esos entornos, recomendamos integrar [TapAndPay](https://developers.google.com/pay/issuers/apis/push-provisioning/android) directamente en lugar de utilizar este SDK.
 
 ### Permisos Requeridos
 
@@ -30,7 +34,7 @@ automática de tarjetas.
 ## Instalación y uso básico
 
 > [!WARNING]
-> Antes de realizar cualquier integración en su app, es necesario completar el proceso de alta con Google. Puede leer más información en [Pomelo Docs](https://docs.pomelo.la/docs/cards/features/tokenization/google-pay/) y  [Push Provisioning API Access](https://developers.google.com/pay/issuers/apis/push-provisioning/android/allowlist) de Google. Si no se realiza correctamente este proceso, al inicializar el SDK obtendrán un error `TAP_AND_PAY_UNAVAILABLE`
+> Antes de realizar cualquier integración en su app, es necesario completar el proceso de alta con Google. Puede leer más información en [Pomelo Docs](https://docs.pomelo.la/docs/cards/features/tokenization/google-pay/) y  [Push Provisioning API Access](https://developers.google.com/pay/issuers/apis/push-provisioning/android/allowlist) de Google. Si no se realiza correctamente este proceso, al inicializar el SDK obtendrán un error `15009` - `TAP_AND_PAY_UNAVAILABLE`
 
 
 ### Resolución de dependencias
@@ -58,30 +62,38 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-  implementation 'com.google.android.gms:play-services-tapandpay:18.3.3'
-  implementation 'com.pomelo:push-provisioning:1.0.39-develop'
+  implementation 'com.google.android.gms:play-services-tapandpay:18.8.0'
+  implementation 'com.pomelo:push-provisioning:2.0.0'
 }
 ```
 
 
-### Inicializar en la Application
+### Crear la instancia del SDK
 
+Declará la instancia directamente como propiedad de la `Activity`:
 
 ```kotlin
-class MyApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-      
-        // Registrar el SDK
-        PomeloPushProvisioning.register(
-            context = this, 
-            environment = PomeloEnvironment.STAGE,
-            enableLogging = true
-        )
+import com.pomelo.sdk.pushprovisioning.PomeloPushProvisioning
+import com.pomelo.sdk.pushprovisioning.PomeloEnvironment
+import com.pomelo.sdk.pushprovisioning.PomeloLogLevel
+
+class MainActivity : ComponentActivity() {
+    private val pushProvisioning = PomeloPushProvisioning(
+        environment = PomeloEnvironment.PRODUCTION,
+        logLevel = PomeloLogLevel.NONE,
+    )
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MyCardScreen(pushProvisioning = pushProvisioning)
+        }
     }
 }
 ```
 
+> [!NOTE]
+> Si tu app tiene múltiples Activities que necesitan compartir la misma instancia, podés declararla en tu clase `Application` para evitar reinicializar el cliente HTTP en cada Activity.
 
 ### Implementar Autenticación
 
@@ -102,50 +114,48 @@ class AuthTokenProvider {
 
 ### Integrar el Composable
 
+> [!WARNING]
+> Cada `GoogleWalletButtonComposable` registra su propio listener de cambios de Google Wallet
+> para mantener su estado sincronizado. Lo ideal es usar un único composable por
+> pantalla/Activity. Montar muchas instancias (por ejemplo, un ítem en una lista
+> larga) multiplica los listeners registrados innecesariamente.
 
 ```kotlin
-@Composable
-fun MyCardScreen(viewModel: HomeViewModel = viewModel()) {
-  var isGPayLoading by remember { mutableStateOf(false) }
+import com.pomelo.sdk.pushprovisioning.PomeloPushProvisioning
+import com.pomelo.sdk.pushprovisioning.model.Brand
+import com.pomelo.sdk.pushprovisioning.model.GWalletEffect
+import com.pomelo.sdk.pushprovisioning.model.PushProvisioningCard
+import com.pomelo.sdk.pushprovisioning.ui.GoogleWalletButtonComposable
 
+@Composable
+fun MyCardScreen(
+  pushProvisioning: PomeloPushProvisioning,
+  viewModel: HomeViewModel = viewModel()
+) {
   Column(modifier = Modifier.padding(16.dp)) {
     GoogleWalletButtonComposable(
+      pushProvisioning = pushProvisioning,
+      card = PushProvisioningCard(
         cardId = "crd-123",
         lastFour = "1234",
         brand = Brand.VISA,
-        asBadge = false,
-        authTokenProvider = { viewModel.getAuthToken("usr-123") },
-        onEffect = { effect ->
-          when (effect) {
-            GWalletEffect.Loading -> {
-              isGPayLoading = true
-            }
-
-            is GWalletEffect.Error -> {
-              isGPayLoading = false
-              val errorMessage =
-                  when (effect.errorType) {
-                    ErrorType.USER_CANCELLED -> "Usuario canceló la operación"
-                    ErrorType.AUTHENTICATION_FAILED -> "Error de autenticación. Intenta nuevamente."
-                    ErrorType.TAP_AND_PAY_SDK -> "Error de Google Pay. Verifica que esté instalado."
-                    ErrorType.OPC_GENERATION_FAILED -> "Error del servidor. Intenta más tarde."
-                    ErrorType.UNKNOWN_ERROR -> "Error: ${effect.message}"
-                  }
-
-              showErrorSnackbar(errorMessage)
-            }
-
-            GWalletEffect.TokenizationCompleted -> {
-              isGPayLoading = false
-              showSuccessSnackbar("¡Tarjeta agregada exitosamente a Google Wallet!")
-            }
-          }
-        },
+      ),
+      accessTokenProvider = { viewModel.getAuthToken("usr-123") },
+      onEffect = { effect ->
+        when (effect) {
+          GWalletEffect.Loading -> showLoading()
+          GWalletEffect.TokenizationCompleted ->
+            showSuccessSnackbar("¡Tarjeta agregada exitosamente a Google Wallet!")
+          GWalletEffect.TokenizationCancelled ->
+            showInfoSnackbar("Usuario canceló la operación")
+          is GWalletEffect.Error -> showErrorSnackbar(effect.error.name)
+        }
+      },
+      asBadge = false,
     )
   }
 }
 ```
-
 
 ## Documentación de API
 
@@ -174,132 +184,195 @@ sequenceDiagram
       App ->> User: Notify success
 ```
 
-### Parámetros de Inicialización
+### 1. Inicialización
 
+#### `PomeloPushProvisioning`
 
 ```kotlin
-PomeloPushProvisioning.register(
-    context = this, 
-    environment = environment,
-    enableLogging = false 
+import com.pomelo.sdk.pushprovisioning.PomeloPushProvisioning
+import com.pomelo.sdk.pushprovisioning.PomeloEnvironment
+import com.pomelo.sdk.pushprovisioning.PomeloLogLevel
+
+val pushProvisioning = PomeloPushProvisioning(
+    environment = PomeloEnvironment.PRODUCTION,
+    logLevel = PomeloLogLevel.NONE,
 )
 ```
 
-
-| Parámetro       | Tipo                | Requerido | Default                        | Descripción                               |
-| --------------- | ------------------- | --------- | ------------------------------ | ----------------------------------------- |
-| `context`       | `Context`           | ✅         | -                              | Contexto de la aplicación                 |
-| `environment`   | `PomeloEnvironment` | ❌         | `PomeloEnvironment.PRODUCTION` | Ambiente del API (STAGE o PRODUCTION)     |
-| `enableLogging` | `Boolean`           | ❌         | `false`                        | Habilita logs para desarrollo y debugging |
+| Parámetro     | Tipo                | Requerido | Default                        | Descripción                           |
+| ------------- | ------------------- | --------- | ------------------------------ | ------------------------------------- |
+| `environment` | `PomeloEnvironment` | ❌         | `PomeloEnvironment.PRODUCTION` | Ambiente del API (STAGE o PRODUCTION) |
+| `logLevel`    | `PomeloLogLevel`    | ❌         | `PomeloLogLevel.NONE`          | Nivel de logs del SDK y HTTP          |
 
 
-### Composable Principal: `PomeloEnvironment`
+#### `PomeloEnvironment`
 
-
-| Environment                    | URL                          |
+| Valor                          | URL                          |
 | ------------------------------ | ---------------------------- |
 | `PomeloEnvironment.STAGE`      | https://api-stage.pomelo.la/ |
 | `PomeloEnvironment.PRODUCTION` | https://api.pomelo.la/       |
 
 
-### Composable Principal: `GPayButtonComposable`
+#### `PomeloLogLevel`
 
+Controla qué información loggea el SDK y su cliente HTTP.
+
+| Valor   | Descripción                                     |
+| ------- | ----------------------------------------------- |
+| `NONE`  | Sin logs (default, recomendado en producción)   |
+| `ERROR` | Solo errores                                    |
+| `WARN`  | Errores y advertencias                          |
+| `DEBUG` | Información de flujo sin cuerpo HTTP            |
+| `BODY`  | Todo, incluyendo headers y body de cada request |
+
+> [!CAUTION]
+> Nunca uses `BODY` o `DEBUG` en producción — pueden exponer información sensible.
+
+---
+
+### 2. Composable Principal: `GoogleWalletButtonComposable`
+
+#### Firma y parámetros
 
 ```kotlin
-@Composable
-fun GPayButtonComposable(
-    cardId: String,
-    lastFour: String,
-    brand: Brand,
-    authTokenProvider: suspend () -> String,
-    modifier: Modifier = Modifier,
+import com.pomelo.sdk.pushprovisioning.ui.GoogleWalletButtonComposable
+
+fun GoogleWalletButtonComposable(
+    pushProvisioning: PomeloPushProvisioning,
+    card: PushProvisioningCard,
+    accessTokenProvider: suspend () -> String,
     asBadge: Boolean = false,
-    onEffect: (GPayEffect) -> Unit = {},
+    onEffect: (GWalletEffect) -> Unit = {},
     alreadyInWalletComposable: (@Composable () -> Unit)? = null,
 )
 ```
 
-
-**Parámetros**:
-
-
-| Parámetro                   | Tipo                        | Requerido | Default    | Descripción                                                                  |
-| --------------------------- | --------------------------- | --------- | ---------- | ---------------------------------------------------------------------------- |
-| `cardId`                    | `String`                    | ✅         | -          | Identificador único de la tarjeta en el sistema Pomelo                       |
-| `lastFour`                  | `String`                    | ✅         | -          | Últimos 4 dígitos de la tarjeta                                              |
-| `brand`                     | `Brand`                     | ✅         | -          | Red de la tarjeta (VISA o MASTERCARD)                                        |
-| `authTokenProvider`         | `suspend () -> String`      | ✅         | -          | Función suspendida que provee el token de autenticación                      |
-| `modifier`                  | `Modifier`                  | ❌         | `Modifier` | Modificadores de Compose para personalización                                |
-| `asBadge`                   | `Boolean`                   | ❌         | `false`    | Si mostrar como badge o botón completo                                       |
-| `onEffect`                  | `(GPayEffect) -> Unit`      | ❌         | `{}`       | Callback para manejar efectos del componente                                 |
-| `alreadyInWalletComposable` | `(@Composable () -> Unit)?` | ❌         | `null`     | Composable personalizado para mostrar cuando la tarjeta ya está en la wallet |
+| Parámetro                   | Tipo                        | Requerido | Default | Descripción                                                                         |
+| --------------------------- | --------------------------- | --------- | ------- | ----------------------------------------------------------------------------------- |
+| `pushProvisioning`          | `PomeloPushProvisioning`    | ✅         | -       | Instancia del SDK                                                                   |
+| `card`                      | `PushProvisioningCard`      | ✅         | -       | Datos de la tarjeta a tokenizar                                                     |
+| `accessTokenProvider`       | `suspend () -> String`      | ✅         | -       | Función suspendida que retorna el End User Token                                    |
+| `asBadge`                   | `Boolean`                   | ❌         | `false` | `true` para mostrar como badge pequeño, `false` para botón completo                |
+| `onEffect`                  | `(GWalletEffect) -> Unit`   | ❌         | `{}`    | Callback para recibir eventos del flujo (ver `GWalletEffect`)                      |
+| `alreadyInWalletComposable` | `(@Composable () -> Unit)?` | ❌         | `null`  | UI personalizada cuando la tarjeta ya está en la wallet. `null` usa `AlreadyInWallet()` por defecto |
 
 
-### Efectos: `GPayEffect`
+#### `PushProvisioningCard`
 
+Datos de la tarjeta a tokenizar.
 
 ```kotlin
-sealed class GPayEffect {
-  object Loading : GPayEffect()
-  object TokenizationCompleted : GPayEffect()
-  data class Error(val errorType: ErrorType, val message: String, val throwable: Throwable? = null) : GPayEffect()
-}
+import com.pomelo.sdk.pushprovisioning.model.PushProvisioningCard
+import com.pomelo.sdk.pushprovisioning.model.Brand
+
+PushProvisioningCard(
+    cardId = "crd-123",
+    lastFour = "1234",
+    brand = Brand.VISA,
+)
+```
+
+| Campo      | Tipo     | Descripción                                      |
+| ---------- | -------- | ------------------------------------------------ |
+| `cardId`   | `String` | Identificador de la tarjeta en el sistema Pomelo |
+| `lastFour` | `String` | Últimos 4 dígitos del PAN                        |
+| `brand`    | `Brand`  | Red de la tarjeta (`VISA` o `MASTERCARD`)        |
+
+
+#### `Brand`
+
+```kotlin
+import com.pomelo.sdk.pushprovisioning.model.Brand
+
+enum class Brand { VISA, MASTERCARD }
 ```
 
 
-### Tipos de Error: `ErrorType`
+#### `AlreadyInWallet`
 
+Composable por defecto que muestra el estado "ya tokenizada". Se puede reemplazar pasando un composable propio en `alreadyInWalletComposable`.
 
 ```kotlin
-enum class ErrorType {
-    USER_CANCELLED,       
-    TAP_AND_PAY_SDK,     
-    AUTHENTICATION_FAILED,
-    OPC_GENERATION_FAILED,
-    UNKNOWN_ERROR,       
+import com.pomelo.sdk.pushprovisioning.ui.AlreadyInWallet
+
+GoogleWalletButtonComposable(
+    pushProvisioning = pushProvisioning,
+    card = card,
+    accessTokenProvider = accessTokenProvider,
+    alreadyInWalletComposable = {
+        Text("Ya está en tu billetera")
+    },
+)
+```
+
+---
+
+### 3. Eventos: `GWalletEffect`
+
+Eventos emitidos por el composable vía `onEffect`.
+
+```kotlin
+import com.pomelo.sdk.pushprovisioning.model.GWalletEffect
+
+sealed class GWalletEffect {
+    object Loading : GWalletEffect()
+    object TokenizationCompleted : GWalletEffect()
+    object TokenizationCancelled : GWalletEffect()
+    data class Error(
+        val error: PushProvisioningError,
+        val tapAndPayStatusCode: Int? = null,
+    ) : GWalletEffect()
 }
 ```
 
+| Caso                    | Descripción                                                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `Loading`               | El flujo de tokenización comenzó                                                                                              |
+| `TokenizationCompleted` | La tarjeta fue agregada exitosamente a Google Wallet                                                                          |
+| `TokenizationCancelled` | El usuario canceló el flujo en Google Wallet                                                                                  |
+| `Error`                 | Ocurrió un error. `error` indica la categoría; `tapAndPayStatusCode` es el código numérico de TapAndPay cuando está disponible |
 
-### Red de Tarjetas: `Brand`
 
+#### `PushProvisioningError`
 
 ```kotlin
-@Immutable
-enum class Brand(val tsp: Int, val network: Int) {
-    VISA(TapAndPay.TOKEN_PROVIDER_VISA, TapAndPay.CARD_NETWORK_VISA),
-    MASTERCARD(TapAndPay.TOKEN_PROVIDER_MASTERCARD, TapAndPay.CARD_NETWORK_MASTERCARD)
+import com.pomelo.sdk.pushprovisioning.model.PushProvisioningError
+
+enum class PushProvisioningError {
+    AUTHENTICATION,
+    WALLET_UNAVAILABLE,
+    TOKENIZATION_FAILED,
 }
 ```
 
-
-## Detalle de Errores
-
-
-### `ErrorType`
-
-
-| Tipo de Error           | Descripción                                                                          |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| `USER_CANCELLED`        | El usuario canceló el proceso de tokenización en Google Wallet                       |
-| `TAP_AND_PAY_SDK`       | Error interno del SDK de Google Pay o problema con la configuración de Google Wallet |
-| `AUTHENTICATION_FAILED` | Error en el método `authTokenProvider`                                               |
-| `OPC_GENERATION_FAILED` | Error al momento de generar los criptogramas                                         |
-| `UNKNOWN_ERROR`         | Error inesperado o caso no contemplado en el flujo normal                            |
+| Valor                 | Descripción                                                            |
+| --------------------- | ---------------------------------------------------------------------- |
+| `AUTHENTICATION`      | Falló `accessTokenProvider` o el token retornado es inválido           |
+| `WALLET_UNAVAILABLE`  | Google Wallet o TapAndPay no están disponibles en el dispositivo o app |
+| `TOKENIZATION_FAILED` | El flujo de tokenización no se completó correctamente                  |
 
 
-### TapAndPay Status Codes
+#### TapAndPay Status Codes
 
+Valores posibles de `GWalletEffect.Error.tapAndPayStatusCode`:
 
-| Código                            | Valor | Descripción                                                                           |
-| --------------------------------- | ----- | ------------------------------------------------------------------------------------- |
-| `TAP_AND_PAY_NO_ACTIVE_WALLET`    | 15002 | No hay una wallet activa en el dispositivo                                            |
-| `TAP_AND_PAY_TOKEN_NOT_FOUND`     | 15003 | El token especificado no se encuentra en la wallet activa                             |
-| `TAP_AND_PAY_INVALID_TOKEN_STATE` | 15004 | El token existe pero no está en un estado válido para la operación                    |
-| `TAP_AND_PAY_ATTESTATION_ERROR`   | 15005 | La tokenización falló porque el dispositivo no pasó la verificación de compatibilidad |
-| `TAP_AND_PAY_UNAVAILABLE`         | 15009 | La API de TapAndPay no está disponible para esta aplicación                           |
-|                                   |       |                                                                                       |
-
+| Código                                            | Valor | Descripción                                                                                          |
+| ------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------- |
+| `TAP_AND_PAY_NO_ACTIVE_WALLET`                    | 15002 | No hay una wallet activa en el dispositivo                                                           |
+| `TAP_AND_PAY_ATTESTATION_ERROR`                   | 15005 | La tokenización falló porque el dispositivo no pasó la verificación de compatibilidad                |
+| `TAP_AND_PAY_UNAVAILABLE`                         | 15009 | La API de TapAndPay no puede ser llamada por esta app — verificá package name y fingerprint en la allowlist |
+| `TAP_AND_PAY_SAVE_CARD_ERROR`                     | 15019 | Falló al guardar el FPAN como card on file                                                           |
+| `TAP_AND_PAY_INELIGIBLE_FOR_TOKENIZATION`         | 15021 | La tarjeta no es elegible para tokenización                                                          |
+| `TAP_AND_PAY_TOKENIZATION_DECLINED`               | 15022 | La tokenización fue rechazada por el TSP (red path)                                                  |
+| `TAP_AND_PAY_TOKENIZE_ERROR`                      | 15024 | La API de TapAndPay no puede ser llamada por esta app                                                |
+| `TAP_AND_PAY_TOKEN_ACTIVATION_REQUIRED`           | 15025 | El intento fue exitoso pero requiere verificación adicional (yellow path)                            |
+| `TAP_AND_PAY_USER_CANCELED_FLOW`                  | 15027 | El usuario canceló el flujo intencionalmente                                                         |
+| `TAP_AND_PAY_ENROLL_FOR_VIRTUAL_CARDS_FAILED`     | 15028 | Falló el intento de enrolamiento en Virtual Cards                                                    |
+| `TAP_AND_PAY_SAVE_CARD_NOT_ATTEMPTED`             | 15030 | No se intentó guardar el FPAN como card on file                                                      |
+| `TAP_AND_PAY_VIRTUAL_CARDS_ENROLLMENT_NOT_ATTEMPTED` | 15031 | No se intentó el enrolamiento en Virtual Cards                                                    |
+| `TAP_AND_PAY_PAYMENT_CREDENTIALS_GENERATION_FAILED` | 15032 | El método `PaymentCredentialsGenerator.generate` falló al retornar las credenciales de pago        |
+| `TAP_AND_PAY_INELIGIBLE_FOR_AUXILIARY_TOKENIZATION` | 15033 | La tarjeta no es elegible para tokenización auxiliar con el TSP auxiliar                           |
+| `TAP_AND_PAY_AUXILIARY_TOKENIZATION_DECLINED`     | 15034 | El TSP auxiliar rechazó el pedido de tokenización auxiliar (red path)                               |
 
 ## Flujo de autenticación
 
@@ -331,121 +404,88 @@ sequenceDiagram
   BFF ->> App: Responds with EUT
 ```
 
-### Control de Logs
+### Logs y Debugging
 
-> [!CAUTION]
-> Nunca habilites logs en producción ya que pueden exponer información sensible. Los logs están sanitizados pero es una buena práctica mantenerlos deshabilitados en producción.
+Habilitá los logs configurando `logLevel` al crear la instancia (ver [`PomeloLogLevel`](#pomerologlevel)).
 
 > [!TIP]
-> Por defecto los logs del SDK de TapAndPay vienen ofuscados, es recomendable solicitar los accesos a Google para facilitar el debugging. [Formulario de acceso.](https://developers.google.com/pay/issuers/apis/push-provisioning/android/support/troubleshooting#enable_logs_for_user)
+> Los logs del SDK de TapAndPay vienen ofuscados por defecto. Para desenofuscarlos, solicitá acceso a Google mediante el [formulario de acceso](https://developers.google.com/pay/issuers/apis/push-provisioning/android/support/troubleshooting#enable_logs_for_user).
 
+El SDK emite logs bajo tags categorizados. Usá `-s` en ADB para filtrar por componente:
 
-Por razones de **seguridad**, los logs están **deshabilitados por defecto**.
-
-
-**¿Qué información se loggea cuando está habilitado?**
-- Estados del flujo de tokenización
-- Respuestas de API (sanitizadas)
-- Logs de red HTTP (sanitizados)
-- Errores y excepciones
-- **Información sensible siempre sanitizada**: IDs de tarjetas, tokens, números de tarjeta se muestran como `***`
-
-
-### Debugging Avanzado con Tags Categorizados
-
-
-El SDK usa **tags categorizados** para facilitar el debugging específico por componente:
-
-
-**Formato de Tags:**
-- **Base**: `PushProvisioning` (logs generales)
-- **ViewModel**: `PushProvisioning:ViewModel` (lógica de negocio)
-- **HTTP**: `PushProvisioning:HTTP` (requests/responses de red)
-- **Composable**: `PushProvisioning:Composable` (UI y estados)
-
-
-**Comandos de Filtrado con ADB:**
-
+| Tag                       | Cuándo usarlo                              |
+| ------------------------- | ------------------------------------------ |
+| `PushProvisioning*`       | Ver todo                                   |
+| `PushProvisioning:Flow`   | Debuggear el flujo de tokenización         |
+| `PushProvisioning:HTTP`   | Inspeccionar requests/responses a Pomelo API |
+| `PushProvisioning:UI`     | Rastrear cambios de estado del composable  |
+| `PushProvisioning:TapPay` | Problemas con el SDK de Google             |
 
 ```bash
-# Todos los logs del SDK
 adb logcat -s "PushProvisioning*"
-
-# Solo logs del ViewModel (lógica de tokenización)
-adb logcat -s "PushProvisioning:ViewModel"
-
-# Solo logs de red HTTP (requests/responses)
-adb logcat -s "PushProvisioning:HTTP" 
-
-# Solo logs de UI (estados del composable)
-adb logcat -s "PushProvisioning:Composable"
-
-# Combinación de categorías específicas
-adb logcat -s "PushProvisioning:ViewModel" -s "PushProvisioning:HTTP"
-
-# Logs con nivel específico
-adb logcat PushProvisioning:ViewModel:D *:S  # Solo DEBUG del ViewModel
+adb logcat -s "PushProvisioning:Flow" -s "PushProvisioning:HTTP"
 ```
 
 ## Troubleshooting
 
-Antes de comenzar a debuggear cualquier problema, asegurate de:
+Antes de debuggear cualquier problema, asegurate de:
 
-1. **Habilitar los logs del SDK**: Configura `enableLogging = true` al inicializar el SDK:
+1. **Habilitar los logs del SDK** con `logLevel = PomeloLogLevel.BODY` (ver [`PomeloLogLevel`](#pomerologlevel)):
 ```kotlin
-PomeloPushProvisioning.register(
-    context = this,
+import com.pomelo.sdk.pushprovisioning.PomeloPushProvisioning
+import com.pomelo.sdk.pushprovisioning.PomeloEnvironment
+import com.pomelo.sdk.pushprovisioning.PomeloLogLevel
+
+val pushProvisioning = PomeloPushProvisioning(
     environment = PomeloEnvironment.STAGE,
-    enableLogging = true  // Habilitar para debugging
+    logLevel = PomeloLogLevel.BODY,
 )
 ```
 
-2. **Solicitar acceso a logs completos de TapAndPay**: Por defecto los logs del SDK de TapAndPay vienen ofuscados. Para facilitar el debugging, solicita acceso a Google mediante el [formulario de acceso](https://developers.google.com/pay/issuers/apis/push-provisioning/android/support/troubleshooting#enable_logs_for_user).
+2. **Desenofuscar los logs de TapAndPay**: por defecto vienen ofuscados. Solicitá acceso a Google mediante el [formulario de acceso](https://developers.google.com/pay/issuers/apis/push-provisioning/android/support/troubleshooting#enable_logs_for_user) para ver mensajes de error completos.
 
-<details>
-<summary><b>El botón no se muestra luego de instalar y configurar el SDK</b></summary>
+### El botón no aparece después de instalar el SDK (`15009` - `TAP_AND_PAY_UNAVAILABLE`)
 
-La causa más probable es que el usuario no tenga acceso a interactuar con el SDK de TapAndPay. Para confirmar esto, revisa los logs:
-
-```
-2025-12-09 15:01:57.431 PushProvisioning:ViewModel  E  Handling error: TAP_AND_PAY_SDK
-    com.google.android.gms.common.api.ApiException: 15009: Calling package not verified|
-```
-
-**Solución**: Deberás solicitar el acceso al TapAndPay SDK directamente con Google. Consulta la [documentación de Push Provisioning API Access](https://developers.google.com/pay/issuers/apis/push-provisioning/android/allowlist).
-
-</details>
-
-<details>
-<summary><b>Error <code>OPC_GENERATION_FAILED</code> al hacer click en el botón</b></summary>
-
-Si en los logs aparece:
+La causa más probable es que la app no esté en la allowlist de Google para usar el SDK de TapAndPay. El código `15009` (`TAP_AND_PAY_UNAVAILABLE`) lo confirma. Buscalo en los logs:
 
 ```
-2025-12-09 15:05:06.232 PushProvisioning  E  Mapping error with explicit type: OPC_GENERATION_FAILED
-    retrofit2.HttpException: HTTP 401
+PushProvisioning:UI    D  Refresh completed source=initial state=Unavailable brand=VISA lastFour=0317
+PushProvisioning:Flow  W  Refresh failed result=Unavailable
+                          com.google.android.gms.common.api.ApiException: 15009: Calling package not verified
 ```
 
-**Solución**: Es muy probable que el método `authTokenProvider` esté retornando un token incorrecto. Revisa que el ambiente configurado sea el correcto (STAGE vs PRODUCTION).
+**Solución**: Solicitá el acceso al TapAndPay SDK directamente con Google. Consultá la [documentación de Push Provisioning API Access](https://developers.google.com/pay/issuers/apis/push-provisioning/android/allowlist).
 
-</details>
+---
 
-<details>
-<summary><b>La App sigue mostrando el botón "Agregar a la Billetera de Google" después de tokenizar</b></summary>
+### Error durante el flujo (`15032` - `TAP_AND_PAY_PAYMENT_CREDENTIALS_GENERATION_FAILED`)
 
-Si lograste tokenizar la tarjeta (por flujo manual o mediante push provisioning) pero la App sigue mostrando el botón, primero confirma que efectivamente la tarjeta se encuentre tokenizada.
-
-Una vez confirmado, revisa los logs:
+El flujo arranca, se lanza la Activity de Google Wallet, pero la tarjeta no queda tokenizada. En los logs vas a ver que la generación del OPC falló con un `401` antes de que Google Wallet pudiera procesar el request:
 
 ```
-2025-12-09 15:09:42.674 PushProvis...letManager  D  Getting token info for lastFour: 5678, brand: MASTERCARD
-2025-12-09 15:09:42.686 PushProvis...letManager  D  Token search result: not found
-2025-12-09 15:09:42.686 PushProvis...:ViewModel  D  No matching token found - setting state to ReadyToAddToWallet
+PushProvis...lGenerator  D  Generating OPC brand=VISA lastFour=5577
+PushProvisioning:HTTP    D  --> POST https://api.pomelo.la/token-provisioning/v2/visa/google-pay
+PushProvisioning:HTTP    D  Authorization: Bearer
+PushProvisioning:HTTP    D  <-- 401 https://api.pomelo.la/token-provisioning/v2/visa/google-pay (498ms)
+PushProvis...lGenerator  E  OPC generation failed brand=VISA
+                             com.pomelo.sdk.pushprovisioning.pomelo.PomeloApiException: Pomelo API failed statusCode=401
+PushProvisioning:TapPay  D  PushTokenizeResult cardResult=false cardStatus=15032 tokenResult=false tokenStatus=15032
+PushProvisioning:UI      D  TapAndPay result=Error(tapAndPayStatusCode=15032)
 ```
 
-Si ves un mensaje similar a `Token search result: not found`, significa que el método `listTokens` del TapAndPay SDK está devolviendo una lista vacía.
+**Solución**: El token retornado por `accessTokenProvider` es inválido o corresponde al ambiente equivocado. Verificá que el `PomeloEnvironment` configurado (STAGE vs PRODUCTION) coincida con el ambiente del token.
 
-**Solución**: Es muy probable que el package name del APK no coincida con el configurado en la bandera. Más información en la [documentación de Google sobre listTokens vacío](https://developers.google.com/pay/issuers/apis/push-provisioning/deprecated/android/support/troubleshooting#listtokens_is_returning_an_empty_list).
+---
 
-</details>
+### El botón sigue apareciendo después de tokenizar la tarjeta
+
+La tarjeta fue tokenizada exitosamente pero el SDK sigue mostrando el botón "Agregar a Google Wallet". Al verificar el estado, `listTokens` devuelve 0 elementos y el SDK interpreta que la tarjeta no está tokenizada:
+
+```
+PushProvisioning:TapPay  D  Token lookup completed found=false tokenCount=0 brand=VISA lastFour=1234
+PushProvisioning:Flow    D  Refresh state result=ReadyToAdd brand=VISA lastFour=1234
+PushProvisioning:UI      D  Refresh completed source=resume state=ReadyToAdd brand=VISA lastFour=1234
+```
+
+**Solución**: El problema más común es que el package name de la app esté mal cargado en los portales de Visa/Mastercard. Verificá que coincida exactamente con el `applicationId` del `build.gradle` — los package names son **case sensitive**, revisá mayúsculas y minúsculas. Si el valor es correcto y el problema persiste, contactá a Pomelo para revisarlo.
 

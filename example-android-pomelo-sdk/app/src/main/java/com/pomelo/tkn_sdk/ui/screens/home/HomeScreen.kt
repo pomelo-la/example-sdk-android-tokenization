@@ -23,14 +23,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.pomelo.sdk.pushprovisioning.ui.GWalletEffect
+import com.pomelo.sdk.pushprovisioning.PomeloPushProvisioning
+import com.pomelo.sdk.pushprovisioning.model.GWalletEffect
+import com.pomelo.sdk.pushprovisioning.model.PushProvisioningCard
 import com.pomelo.sdk.pushprovisioning.ui.GoogleWalletButtonComposable
 import com.pomelo.tkn_sdk.ui.composables.CardCarousel
 import com.pomelo.tkn_sdk.ui.composables.Loader
 import kotlinx.coroutines.launch
 
 @Composable
-fun HomeComposable(viewModel: HomeViewModel = viewModel()) {
+fun HomeComposable(
+  pushProvisioning: PomeloPushProvisioning,
+  viewModel: HomeViewModel = viewModel()
+) {
   var isGPayLoading by remember { mutableStateOf(false) }
   val snackbarHostState = remember { SnackbarHostState() }
   val coroutineScope = rememberCoroutineScope()
@@ -53,46 +58,55 @@ fun HomeComposable(viewModel: HomeViewModel = viewModel()) {
 
       Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+          modifier = Modifier.padding(horizontal = 16.dp),
+          snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { paddingValue ->
           Column(
-              modifier = Modifier.padding(paddingValues = paddingValue),
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(paddingValues = paddingValue),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
           ) {
             CardCarousel(cards = cards, pagerState = pagerState)
 
             GoogleWalletButtonComposable(
+              pushProvisioning = pushProvisioning,
+              asBadge = false,
+              accessTokenProvider = { viewModel.getAuthToken(selectedCard.userId) },
+              card = PushProvisioningCard(
                 cardId = selectedCard!!.cardId,
                 lastFour = selectedCard.lastFour,
                 brand = selectedCard.brand,
-                asBadge = false,
-                authTokenProvider = { viewModel.getAuthToken(selectedCard.userId) },
-                onEffect = { effect ->
-                  when (effect) {
-                    GWalletEffect.Loading -> {
-                      Log.i("CardComposeScreen", "GPay loading...")
-                      isGPayLoading = true
-                    }
+              ),
 
-                    is GWalletEffect.Error -> {
-                      Log.i("CardComposeScreen", "GPay error: ${effect.message}")
-                      isGPayLoading = false
-                      coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Error en GPay: ${effect.message}")
-                      }
-                    }
+              onEffect = { effect ->
+                when (effect) {
+                  GWalletEffect.Loading -> {
+                    Log.i("CardComposeScreen", "GPay loading...")
+                    isGPayLoading = true
+                  }
 
-                    GWalletEffect.TokenizationCompleted -> {
-                      Log.i("CardComposeScreen", "GPay tokenization completed")
-                      isGPayLoading = false
-                      coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Tokenización completada")
-                      }
+                  is GWalletEffect.Error -> {
+                    Log.i("CardComposeScreen", "GPay error: ${effect.error.name}")
+                    isGPayLoading = false
+                    coroutineScope.launch {
+                      snackbarHostState.showSnackbar("Error en GPay: ${effect.error.name}")
                     }
                   }
-                },
+
+                  GWalletEffect.TokenizationCompleted -> {
+                    Log.i("CardComposeScreen", "GPay tokenization completed")
+                    isGPayLoading = false
+                    coroutineScope.launch {
+                      snackbarHostState.showSnackbar("Tokenización completada")
+                    }
+                  }
+
+                  GWalletEffect.TokenizationCancelled -> {
+                    Log.i("CardComposeScreen", "GPay tokenization cancelled")
+                    isGPayLoading = false
+                  }
+                }
+              },
             )
           }
         }

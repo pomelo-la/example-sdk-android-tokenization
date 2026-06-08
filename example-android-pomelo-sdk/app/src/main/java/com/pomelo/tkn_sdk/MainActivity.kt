@@ -6,17 +6,18 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.pomelo.sdk.pushprovisioning.PomeloEnvironment
+import com.pomelo.sdk.pushprovisioning.PomeloLogLevel
 import com.pomelo.sdk.pushprovisioning.PomeloPushProvisioning
 import com.pomelo.tkn_sdk.ui.screens.home.HomeComposable
 import com.pomelo.tkn_sdk.ui.theme.Tkn_sdkTheme
 
 class MainActivity : ComponentActivity() {
-  override fun onCreate(savedInstanceState: Bundle?) {
-    PomeloPushProvisioning.register(
-        context = this,
-        enableLogging = true,
-    )
+  private val pushProvisioning = PomeloPushProvisioning(
+      environment = PomeloEnvironment.STAGE,
+      logLevel = PomeloLogLevel.BODY,
+  )
 
+  override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge(
         statusBarStyle =
@@ -25,6 +26,6 @@ class MainActivity : ComponentActivity() {
                 android.graphics.Color.TRANSPARENT,
             )
     )
-    setContent { Tkn_sdkTheme { HomeComposable() } }
+    setContent { Tkn_sdkTheme { HomeComposable(pushProvisioning = pushProvisioning) } }
   }
 }

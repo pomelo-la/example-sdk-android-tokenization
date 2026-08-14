@@ -112,6 +112,38 @@ sequenceDiagram
     end
 ```
 
+### Vista completa (arquitectura oficial de Google)
+
+El diagrama de arriba es nuestra implementación puntual. Este otro es el diagrama de arquitectura completo que publica Google en su [App-to-app verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv), adaptado con los nombres de este ejemplo. Muestra también la parte que no vemos ni implementamos nosotros: el handshake interno entre Google y Pomelo (como TSP) que ocurre por detrás de nuestras dos llamadas (`App Mobile -> Backend App` y `Backend App -> Pomelo`).
+
+```mermaid
+sequenceDiagram
+    participant User as Tarjetahabiente
+    participant Wallet as Google Wallet
+    participant WalletBackend as Google (Backend)
+    participant App as App Mobile
+    participant Backend as Backend App
+    participant Pomelo as Pomelo
+
+    User->>Wallet: Selecciona la opción "app-to-app"
+    Wallet->>App: startActivityForResult(package_name, action, EXTRA_TEXT=BLOB)
+
+    Note over App: Autentica al usuario
+
+    App->>Backend: activateToken(tokenId)
+    Backend->>Pomelo: activateToken(tokenId)
+
+    Pomelo->>WalletBackend: handleTspEvent(TOKEN_STATUS_UPDATED, tokenRefId)
+    WalletBackend-->>Pomelo: acknowledged
+
+    WalletBackend->>Pomelo: getTokenStatus(tokenRefId)
+    Pomelo-->>WalletBackend: status = "active"
+
+    Pomelo-->>Backend: success
+    Backend-->>App: success
+    App->>Wallet: activityResult(RESULT_OK)
+```
+
 ## Segui leyendo
 
 - Para el flujo Android, los diagramas y las referencias del SDK, mira [`app/README.md`](app/README.md).

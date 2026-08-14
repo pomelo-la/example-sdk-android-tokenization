@@ -36,7 +36,7 @@ fun VisaAppToAppScreen(uiState: VisaAppToAppUiState, onActivate: () -> Unit, onC
         bottomBar = {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 when {
                     uiState.isActivating -> CircularProgressIndicator()

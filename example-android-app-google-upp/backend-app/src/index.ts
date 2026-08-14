@@ -9,6 +9,7 @@ import { env } from "./env.js";
 
 import cards from "./routes/cards.js";
 import pushProvisioning from "./routes/push-provisioning.js";
+import tokenLifecycle from "./routes/token-lifecycle.js";
 import users from "./routes/users.js";
 
 const app = new Hono();
@@ -28,6 +29,7 @@ app.onError((error, _) => {
 app.route("/", cards);
 app.route("/", users);
 app.route("/", pushProvisioning);
+app.route("/", tokenLifecycle);
 
 const main = async () => {
   await bootstrapToken();

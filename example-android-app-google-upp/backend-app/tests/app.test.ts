@@ -58,14 +58,32 @@ const mockPomeloHttp = () => {
     throw new Error(`Unexpected GET path: ${path}`);
   }) as typeof pomeloHttp.get;
 
-  pomeloHttp.post = (async <_T = unknown>(path: string, payload?: unknown) => ({
-    data: {
+  pomeloHttp.post = (async <_T = unknown>(path: string, payload?: unknown) => {
+    const activationMatch = path.match(
+      /^\/tokenization\/v1\/tokens\/(.+)\/app-to-app-activation$/,
+    );
+
+    if (activationMatch) {
+      return {
+        data: {
+          data: {
+            external_token_id: activationMatch[1],
+            activation_result: "APPROVED",
+          },
+          error: null,
+        },
+      };
+    }
+
+    return {
       data: {
-        provider: path.includes("/visa/") ? "VISA" : "MASTERCARD",
-        payload,
+        data: {
+          provider: path.includes("/visa/") ? "VISA" : "MASTERCARD",
+          payload,
+        },
       },
-    },
-  })) as typeof pomeloHttp.post;
+    };
+  }) as typeof pomeloHttp.post;
 };
 
 test.afterEach(() => {
@@ -185,6 +203,82 @@ test("POST /push-provisioning/visa/google-pay validates Google-provided ids", as
     await response.text(),
     "✖ is required\n  → at device_id\n✖ is required\n  → at wallet_account_id",
   );
+});
+
+test("POST /tokens/:id/app-to-app-activation forwards external_token_id", async () => {
+  mockPomeloHttp();
+  const response = await app.request(
+    "http://localhost/tokens/token-abc-123/app-to-app-activation",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ device_id: "device-abc" }),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    external_token_id: "token-abc-123",
+    activation_result: "APPROVED",
+  });
+});
+
+test("POST /tokens/:id/app-to-app-activation forwards device_id to Pomelo", async () => {
+  let receivedPath: string | undefined;
+  let receivedPayload: unknown;
+
+  pomeloHttp.post = (async (path: string, payload?: unknown) => {
+    receivedPath = path;
+    receivedPayload = payload;
+
+    return {
+      data: {
+        data: {
+          external_token_id: "token-abc-123",
+          activation_result: "APPROVED",
+        },
+      },
+    };
+  }) as typeof pomeloHttp.post;
+
+  await app.request(
+    "http://localhost/tokens/token-abc-123/app-to-app-activation",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ device_id: "device-abc" }),
+    },
+  );
+
+  assert.equal(
+    receivedPath,
+    "/tokenization/v1/tokens/token-abc-123/app-to-app-activation",
+  );
+  assert.deepEqual(receivedPayload, { device_id: "device-abc" });
+});
+
+test("POST /tokens/:id/app-to-app-activation accepts a missing device_id", async () => {
+  mockPomeloHttp();
+  const response = await app.request(
+    "http://localhost/tokens/token-abc-123/app-to-app-activation",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({}),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    external_token_id: "token-abc-123",
+    activation_result: "APPROVED",
+  });
 });
 
 test("route errors are normalized", async () => {

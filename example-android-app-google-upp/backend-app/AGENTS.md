@@ -8,6 +8,7 @@
   - `GET /users/:id`
   - `POST /push-provisioning/mastercard/google-pay`
   - `POST /push-provisioning/visa/google-pay`
+  - `POST /tokens/:id/app-to-app-activation` (App2App / IDV, Visa)
 
 ## Runtime
 

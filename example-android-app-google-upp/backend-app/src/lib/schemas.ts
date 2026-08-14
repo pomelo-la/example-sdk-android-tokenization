@@ -31,3 +31,10 @@ export const visaPushProvisioningBodySchema = pushProvisioningBodySchema.extend(
 export type PushProvisioningRequest = z.infer<
 	typeof pushProvisioningBodySchema
 >;
+
+// Visa requiere device_id para validar el dispositivo en la activacion App2App
+// (Mastercard/MDES no lo pide), por eso viaja como opcional/nullable: este mismo
+// endpoint sirve para cualquier TSP que llegue a necesitar la activacion.
+export const appToAppActivationBodySchema = z.object({
+	device_id: nonEmptyString().nullable().optional(),
+});

@@ -13,6 +13,7 @@ Backend de ejemplo para integrar Pomelo Push Provisioning con Google UPP desde u
 - `GET /users/:id`
 - `POST /push-provisioning/mastercard/google-pay`
 - `POST /push-provisioning/visa/google-pay`
+- `POST /tokens/:id/app-to-app-activation`
 
 ## Variables de entorno
 
@@ -109,6 +110,29 @@ Respuesta:
 {
   "opc": "eyJmdW5kaW5nQ ....",
   "google_opc": "eyJmdW5kaW5 ...."
+}
+```
+
+### App2App activation (Visa)
+
+Activa un token cuando Visa requiere verificacion de identidad (IDV / "yellow path")
+antes de completar la digitalizacion. `device_id` viaja opcional/nullable porque
+solo Visa lo exige; ver el flujo completo en el README raiz.
+
+```bash
+curl -X POST "http://localhost:3000/tokens/tkn-123/app-to-app-activation" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "device-123"
+  }'
+```
+
+Respuesta:
+
+```json
+{
+  "external_token_id": "tkn-123",
+  "activation_result": "APPROVED"
 }
 ```
 

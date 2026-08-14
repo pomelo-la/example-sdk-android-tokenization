@@ -75,6 +75,8 @@ sequenceDiagram
 
 ## Diagrama de secuencia: App2App (IDV) para Visa
 
+Referencia oficial: [App-to-app verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv) (Google).
+
 > [!IMPORTANT]
 > Este flujo es independiente del push provisioning manual de arriba: acá Google Wallet inicia el Intent, no la app, y en ningún momento se llama al SDK Tap And Pay.
 

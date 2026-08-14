@@ -132,8 +132,10 @@ Referencia oficial: [Sample code for pushTokenize(...)](https://developers.googl
 
 ## App2App (IDV) para Visa
 
+Referencia oficial: [App-to-app verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv) (Google, pública).
+
 > [!IMPORTANT]
-> La documentación oficial completa de Google sobre App2App / IDV Verification y la de Visa sobre App2App son de acceso restringido a partners autorizados (`developers.google.com/pay/issuers/request-access`), no públicas. Esta sección resume la implementación aplicada en este ejemplo; ante cualquier duda de comportamiento, consultá esa documentación de partner en vez de asumir.
+> La doc de Google de arriba describe el contrato genérico (intent-filter, `EXTRA_TEXT`, validación del caller, `setResult`), pero sus nombres de ejemplo (`ACTIVATE_TOKEN`, `BANKING_APP_ACTIVATION_RESPONSE`) son placeholders genéricos, no lo que implementamos. La letra chica específica de Visa (acción fija `{package}.a2a`, campos del payload, extra `STEP_UP_RESPONSE` con valores `approved`/`declined`/`failure`, opciones de activación) está en la documentación de partner de Visa (VTS), de acceso restringido (`developers.google.com/pay/issuers/request-access`). Esta sección resume la implementación aplicada en este ejemplo; ante cualquier duda de comportamiento, consultá esas fuentes en vez de asumir.
 
 Este flujo es **independiente** del Push Provisioning manual de la sección anterior: no comparten código ni Activity, y no hay que confundirlos. En vez de que la app inicie el `pushTokenize`, es **Google Wallet quien invoca la app** cuando Visa determina que un token necesita verificación de identidad del cardholder ("yellow path") antes de poder activarlo. La app nunca llama al SDK Tap And Pay en este flujo: es un handoff de Intent más una llamada HTTP al backend propio.
 

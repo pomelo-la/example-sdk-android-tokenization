@@ -125,6 +125,110 @@ Este handler es intencionalmente basico para la app de ejemplo: no intenta model
 
 Referencia oficial: [Sample code for pushTokenize(...)](https://developers.google.com/pay/issuers/apis/push-provisioning/android/upgrade_to_upp#sample_code_for_pushtokenize)
 
+## App2App (IDV) para Visa
+
+> [!IMPORTANT]
+> La documentación oficial completa de Google sobre App2App / IDV Verification y la de Visa sobre App2App son de acceso restringido a partners autorizados (`developers.google.com/pay/issuers/request-access`), no públicas. Esta sección resume la implementación aplicada en este ejemplo; ante cualquier duda de comportamiento, consultá esa documentación de partner en vez de asumir.
+
+Este flujo es independiente del push provisioning manual descripto arriba. En vez de que la app inicie el `pushTokenize`, es **Google Wallet quien invoca la app** cuando Visa determina que un token necesita verificación de identidad del cardholder ("yellow path") antes de poder activarlo. La app nunca llama al SDK Tap And Pay en este flujo: es un handoff de Intent más una llamada HTTP al backend propio.
+
+### Intent-filter
+
+Visa exige que la action del intent-filter tenga el formato fijo `{banking app identifier}.{service name}`, con `service name` siempre `a2a`. En este ejemplo (`applicationId = com.example.example_google_upp`) queda declarado en [`AndroidManifest.xml`](app/src/main/AndroidManifest.xml):
+
+```xml
+<activity android:name=".wallet.VisaAppToAppVerificationActivity" android:exported="true">
+    <intent-filter>
+        <action android:name="com.example.example_google_upp.a2a" />
+        <category android:name="android.intent.category.DEFAULT" />
+    </intent-filter>
+</activity>
+```
+
+Mastercard/MDES usaría una action distinta (asignada en MDES Manager), fuera de alcance de este ejemplo Visa-only.
+
+### VisaAppToAppVerificationActivity
+
+[VisaAppToAppVerificationActivity.kt](app/src/main/java/com/example/example_google_upp/wallet/VisaAppToAppVerificationActivity.kt) recibe el Intent de Google Wallet. Responsabilidades:
+
+- Validar que el caller sea Google Wallet (`callingPackage == "com.google.android.gms"`), rechazando cualquier otro caller. En builds debug se acepta además `callingPackage == null`, que es lo que ocurre al lanzar el Intent manualmente con `adb` (ver [Testing manual con adb](#testing-manual-con-adb)); en release el chequeo queda estricto.
+- Decodificar el payload de `Intent.EXTRA_TEXT` con `VisaAppToAppPayload`.
+- Autenticar al cardholder con `BiometricPrompt` antes de mostrar la pantalla de confirmación (ver más abajo).
+- Reportar el resultado a Google Wallet con `setResult(RESULT_OK, ...)` y el extra `STEP_UP_RESPONSE`.
+
+Extiende `FragmentActivity` (no `ComponentActivity` como `MainActivity`) porque `BiometricPrompt` lo requiere.
+
+### VisaAppToAppPayload
+
+[VisaAppToAppPayload.kt](app/src/main/java/com/example/example_google_upp/wallet/models/VisaAppToAppPayload.kt) decodifica el payload opaco que Visa manda en `EXTRA_TEXT`: un JSON codificado en Base64URL con `panReferenceID`, `tokenRequestorID`, `tokenReferenceID`, `panLast4`, `deviceID` y `walletAccountID`. Nunca viaja ahí información PCI/de autenticación, por diseño de Google.
+
+### Autenticación del cardholder (BiometricPrompt)
+
+Antes de mostrar la pantalla de confirmación, `VisaAppToAppVerificationActivity.promptCardholderAuthentication()` pide autenticación con `BiometricPrompt` (`BIOMETRIC_STRONG`, sumando `DEVICE_CREDENTIAL` desde API 30). Si falla, se cancela o no hay biometría disponible en el dispositivo, la Activity reporta `declined` a Google Wallet sin llegar a mostrar la tarjeta.
+
+> [!NOTE]
+> Esto es un ejemplo runnable, **no una recomendación**: cada emisor debe elegir la estrategia de autenticación que mejor le quede a su propia app (biometría, reconocimiento facial, una sesión ya activa, usuario y contraseña, PIN, etc.), no asumir que tiene que ser `BiometricPrompt`.
+
+### VisaAppToAppViewModel y VisaAppToAppScreen
+
+[VisaAppToAppViewModel.kt](app/src/main/java/com/example/example_google_upp/ui/VisaAppToAppViewModel.kt) mapea el payload decodificado a un `Card` de dominio (usando el mismo fallback `"Pomelo Card"` que `BackendService` cuando falta el nombre del cardholder, ya que el payload de Visa nunca lo incluye) y, al confirmar, llama a `BackendService.activateAppToAppToken(tokenId, deviceId)`.
+
+[VisaAppToAppScreen.kt](app/src/main/java/com/example/example_google_upp/ui/VisaAppToAppScreen.kt) reusa `PomeloCardComposable` para mostrar la tarjeta, con un layout inspirado en el mockup "Issuer app UI" de la documentación de Google: título de marca, instrucción corta, la tarjeta centrada y un botón de acción principal pineado abajo.
+
+### Backend y resultado
+
+`BackendService.activateAppToAppToken(...)` llama a `POST tokens/:id/app-to-app-activation` del backend (ver [`backend-app/README.md`](../backend-app/README.md)), que hace passthrough hacia Pomelo. La respuesta (`APPROVED`/`DECLINED`/`FAILURE`) se mapea a `AppToAppActivationResult` y, vía `VisaAppToAppStepUpResponse`, al extra `STEP_UP_RESPONSE` (`approved`/`declined`/`failure`) que se devuelve a Google Wallet con `setResult(RESULT_OK, ...)`.
+
+Esta implementación es la **"Opción 1"** de activación de Visa: el backend llama directo a la Token Lifecycle API de Visa (out of band), y la app solo informa el resultado — no se devuelve un código de autenticación (TAV), que sería la "Opción 2".
+
+```mermaid
+flowchart TD
+    A["Google Wallet lanza el Intent (action a2a)"] --> B{"¿callingPackage es Google Wallet?"}
+    B -->|No, y no es debug| C["finish() con Failed('Untrusted caller')"]
+    B -->|Sí| D["Decodifica VisaAppToAppPayload desde EXTRA_TEXT"]
+    D --> E["BiometricPrompt.authenticate()"]
+    E --> F{"¿Autenticación exitosa?"}
+    F -->|No| G["setResult: STEP_UP_RESPONSE=declined"]
+    F -->|Sí| H["Muestra VisaAppToAppScreen (card + Activar/Cancelar)"]
+    H --> I["Tap en Activar"]
+    I --> J["BackendService.activateAppToAppToken(tokenId, deviceId)"]
+    J --> K["Backend hace proxy a Pomelo"]
+    K --> L{"activation_result"}
+    L -->|APPROVED| M["setResult: STEP_UP_RESPONSE=approved"]
+    L -->|DECLINED| N["setResult: STEP_UP_RESPONSE=declined"]
+    L -->|FAILURE| O["setResult: STEP_UP_RESPONSE=failure"]
+```
+
+### Testing manual con adb
+
+Para simular el Intent de Google Wallet sin depender del flujo real de IDV, se puede armar un payload mockeado y dispararlo directo:
+
+```bash
+# Arma el payload (Base64URL, sin padding necesario)
+python3 -c "
+import base64, json
+payload = {
+    'panReferenceID': 'pan-ref-mock-1',
+    'tokenRequestorID': 'trid-mock-1',
+    'tokenReferenceID': 'token-mock-1',
+    'panLast4': '4242',
+    'deviceID': 'device-mock-1',
+    'walletAccountID': 'wallet-mock-1',
+}
+print(base64.urlsafe_b64encode(json.dumps(payload).encode()).decode())
+"
+
+# Dispara el Intent con el payload generado
+adb shell am start -a com.example.example_google_upp.a2a \
+  -p com.example.example_google_upp \
+  --es android.intent.extra.TEXT '<payload-base64-generado-arriba>'
+```
+
+Con un build **debug** instalado, esto atraviesa todo el flujo real: valida el caller (aceptando `callingPackage == null` solo en debug), pide biometría, muestra la pantalla de confirmación, y al tocar "Activar" llama al backend local (necesita `backend-app` corriendo y, si el dispositivo es físico, `adb reverse tcp:3000 tcp:3000` para llegar a `127.0.0.1:3000`).
+
+> [!NOTE]
+> El diálogo de `BiometricPrompt` no se puede capturar con `adb exec-out screencap` (Android lo bloquea con `FLAG_SECURE`); la captura sale en negro, es esperado.
+
 ## Referencias del SDK usadas por la app
 
 - [Provision Button API](https://developers.google.com/pay/issuers/apis/push-provisioning/android/provision-button-api)

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Purpose
 
-This is a reference backend for Pomelo clients migrating to Google UPP Push Provisioning SDK. It exposes simple passthrough endpoints to Pomelo for card/user lookups and push provisioning flows (Mastercard and Visa Google Pay).
+This is a reference backend for Pomelo clients migrating to Google UPP Push Provisioning SDK. It exposes simple passthrough endpoints to Pomelo for card/user lookups, push provisioning flows (Mastercard and Visa Google Pay), and App2App (IDV) token activation for Visa.
 
 ## Stack & Architecture
 

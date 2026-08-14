@@ -1,6 +1,8 @@
 package com.example.example_google_upp.data
 
+import com.example.example_google_upp.data.dto.AppToAppActivationRequestDto
 import com.example.example_google_upp.data.dto.ProvisioningRequestDto
+import com.example.example_google_upp.model.AppToAppActivationResult
 import com.example.example_google_upp.model.Brand
 import com.example.example_google_upp.model.Card
 import com.google.gson.Gson
@@ -338,6 +340,58 @@ class BackendServiceTest {
             assertNotNull(error)
             assertEquals("Backend response is missing legal_address.region", error?.message)
         }
+
+    @Test
+    fun `activateAppToAppToken forwards device id and maps activation result`() = runTest {
+        val service = createService { request: HttpRequestData ->
+            assertEquals(HttpMethod.Post, request.method)
+            assertEquals(
+                "/tokens/token-abc-123/app-to-app-activation",
+                request.url.encodedPath,
+            )
+
+            val payload =
+                gson.fromJson(requestBody(request), AppToAppActivationRequestDto::class.java)
+            assertEquals("device-abc", payload.deviceId)
+
+            respondJson(
+                """
+                {
+                  "external_token_id": "token-abc-123",
+                  "activation_result": "APPROVED"
+                }
+                """
+                    .trimIndent()
+            )
+        }
+
+        val result = service.activateAppToAppToken(tokenId = "token-abc-123", deviceId = "device-abc")
+
+        assertEquals(AppToAppActivationResult.Approved, result)
+    }
+
+    @Test
+    fun `activateAppToAppToken maps declined and unexpected results`() = runTest {
+        val declinedService = createService {
+            respondJson(
+                """{ "external_token_id": "tkn-1", "activation_result": "DECLINED" }"""
+            )
+        }
+        val unexpectedService = createService {
+            respondJson("""{ "external_token_id": "tkn-2", "activation_result": "WEIRD" }""")
+        }
+
+        assertEquals(
+            AppToAppActivationResult.Declined,
+            declinedService.activateAppToAppToken(tokenId = "tkn-1", deviceId = null),
+        )
+        assertEquals(
+            AppToAppActivationResult.Failed(
+                "Backend returned an unexpected activation_result: WEIRD"
+            ),
+            unexpectedService.activateAppToAppToken(tokenId = "tkn-2", deviceId = null),
+        )
+    }
 
     private fun createService(
         handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData

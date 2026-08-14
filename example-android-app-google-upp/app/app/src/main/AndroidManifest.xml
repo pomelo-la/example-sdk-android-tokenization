@@ -26,6 +26,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+        App2App (IDV / "yellow path") step-up: Google Wallet launches this Activity when Visa
+        needs cardholder verification to activate a token. The action must match exactly what
+        Visa registers for this app: "{banking app identifier}.a2a" (fixed "a2a" service name).
+        Mastercard/MDES would need a second intent-filter with a different action assigned in
+        MDES Manager, out of scope for this Visa-only example.
+        -->
+        <activity
+            android:name=".wallet.VisaAppToAppVerificationActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Examplegoogleupp">
+            <intent-filter>
+                <action android:name="com.example.example_google_upp.a2a" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

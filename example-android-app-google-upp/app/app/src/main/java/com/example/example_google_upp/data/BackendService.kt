@@ -1,10 +1,13 @@
 package com.example.example_google_upp.data
 
 import android.util.Log
+import com.example.example_google_upp.data.dto.AppToAppActivationRequestDto
+import com.example.example_google_upp.data.dto.AppToAppActivationResponseDto
 import com.example.example_google_upp.data.dto.CardDto
 import com.example.example_google_upp.data.dto.ProvisioningCredentialsDto
 import com.example.example_google_upp.data.dto.ProvisioningRequestDto
 import com.example.example_google_upp.data.dto.UserDto
+import com.example.example_google_upp.model.AppToAppActivationResult
 import com.example.example_google_upp.model.Brand
 import com.example.example_google_upp.model.Card
 import com.example.example_google_upp.model.ProvisioningData
@@ -49,6 +52,20 @@ internal constructor(
     suspend fun getUser(userId: String): User = get<UserDto>("users/$userId").toDomain()
 
     suspend fun getCardById(cardId: String): Card = get<CardDto>("cards/$cardId").toDomain()
+
+    /**
+     * Activates a token during Visa's App2App (IDV) step-up flow.
+     *
+     * `deviceId` comes from the Visa payload Google Wallet sends to
+     * `VisaAppToAppVerificationActivity` and is only required for TSPs (currently Visa) that
+     * validate the device on activation.
+     */
+    suspend fun activateAppToAppToken(tokenId: String, deviceId: String?): AppToAppActivationResult =
+        post<AppToAppActivationResponseDto>(
+                "tokens/$tokenId/app-to-app-activation",
+                AppToAppActivationRequestDto(deviceId = deviceId),
+            )
+            .toDomain()
 
     private suspend inline fun <reified T> get(path: String): T =
         gson.fromJson(client.get(url(path)).bodyAsText(), T::class.java)

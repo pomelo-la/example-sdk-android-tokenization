@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.example.example_google_upp.BuildConfig
 import com.example.example_google_upp.model.AppToAppActivationResult
 import com.example.example_google_upp.ui.VisaAppToAppScreen
 import com.example.example_google_upp.ui.VisaAppToAppViewModel
@@ -72,9 +73,16 @@ class VisaAppToAppVerificationActivity : ComponentActivity() {
     /**
      * Verifies the Intent was actually started by Google Wallet, not another app impersonating it.
      *
+     * `callingPackage` is only set when the caller used `startActivityForResult` (what Google
+     * Wallet does); it is null when this Activity is launched any other way, e.g. `adb shell am
+     * start`. Debug builds accept a null caller so this flow can be exercised manually with a
+     * mocked payload, as Google's own App2App verification troubleshooting guide suggests testing
+     * with `adb`. Release builds keep the check strict.
+     *
      * Docs: Google App2App verification, "Mobile app security".
      */
-    private fun isCalledByGoogleWallet(): Boolean = callingPackage == GOOGLE_WALLET_PACKAGE
+    private fun isCalledByGoogleWallet(): Boolean =
+        callingPackage == GOOGLE_WALLET_PACKAGE || (BuildConfig.DEBUG && callingPackage == null)
 
     /** Reports the activation result back to Google Wallet via the `STEP_UP_RESPONSE` extra. */
     private fun finishWithResult(result: AppToAppActivationResult) {

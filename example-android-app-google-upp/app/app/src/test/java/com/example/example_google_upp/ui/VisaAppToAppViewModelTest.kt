@@ -2,6 +2,7 @@ package com.example.example_google_upp.ui
 
 import com.example.example_google_upp.data.BackendService
 import com.example.example_google_upp.model.AppToAppActivationResult
+import com.example.example_google_upp.model.Brand
 import com.example.example_google_upp.wallet.models.VisaAppToAppPayload
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -34,7 +35,7 @@ class VisaAppToAppViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals("Google Wallet sent an invalid App2App payload", state.errorMessage)
-        assertNull(state.panLast4)
+        assertNull(state.card)
     }
 
     @Test
@@ -54,11 +55,19 @@ class VisaAppToAppViewModelTest {
         val viewModel = VisaAppToAppViewModel(unusedBackendService())
 
         viewModel.onPayloadParsed(
-            VisaAppToAppPayload(tokenReferenceId = "token-123", panLast4 = "4242")
+            VisaAppToAppPayload(
+                tokenReferenceId = "token-123",
+                panLast4 = "4242",
+                walletAccountId = "wallet-123",
+            )
         )
 
         val state = viewModel.uiState.value
-        assertEquals("4242", state.panLast4)
+        assertEquals("4242", state.card?.lastFour)
+        assertEquals("token-123", state.card?.cardId)
+        assertEquals("wallet-123", state.card?.userId)
+        assertEquals("Pomelo Card", state.card?.cardholderName)
+        assertEquals(Brand.VISA, state.card?.brand)
         assertNull(state.errorMessage)
     }
 

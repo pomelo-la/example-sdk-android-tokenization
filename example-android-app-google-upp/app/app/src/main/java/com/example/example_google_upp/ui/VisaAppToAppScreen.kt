@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.example_google_upp.components.PomeloCardComposable
 
 /** Confirmation screen shown by VisaAppToAppVerificationActivity while Google Wallet waits for IDV. */
 @Composable
@@ -26,12 +27,7 @@ fun VisaAppToAppScreen(uiState: VisaAppToAppUiState, onActivate: () -> Unit, onC
         ) {
             Text(text = "Confirm this card activation", style = MaterialTheme.typography.titleLarge)
 
-            uiState.panLast4?.let { lastFour ->
-                Text(
-                    text = "•••• •••• •••• $lastFour",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-            }
+            uiState.card?.let { card -> PomeloCardComposable(card) }
 
             uiState.errorMessage?.let { message ->
                 Text(text = message, color = MaterialTheme.colorScheme.error)

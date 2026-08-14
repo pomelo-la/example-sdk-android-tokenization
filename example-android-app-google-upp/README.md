@@ -75,46 +75,12 @@ sequenceDiagram
 
 ## Diagrama de secuencia: App2App (IDV) para Visa
 
-Referencia oficial: [App-to-app verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv) (Google).
+Referencia oficial: [App-to-app verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv) (Google). Diagrama de arquitectura de esa misma página, adaptado con los nombres de este ejemplo.
 
 > [!IMPORTANT]
 > Este flujo es independiente del push provisioning manual de arriba: acá Google Wallet inicia el Intent, no la app, y en ningún momento se llama al SDK Tap And Pay.
 
-```mermaid
-sequenceDiagram
-    participant Wallet as Google Wallet
-    participant App as App Mobile
-    participant Bio as Biometría del dispositivo
-    participant Backend as Backend App
-    participant Pomelo as Pomelo
-    participant Visa as Visa (Token Lifecycle API)
-
-    Note over Wallet: Visa determina que el token necesita<br/>verificación de identidad (IDV / "yellow path")
-    Wallet->>App: Intent explícito (action "{applicationId}.a2a")<br/>EXTRA_TEXT: payload Base64URL+JSON
-
-    Note over App: Valida que el caller sea Google Wallet<br/>(callingPackage == com.google.android.gms)
-    App->>App: Decodifica VisaAppToAppPayload<br/>(tokenReferenceID, panLast4, deviceID, ...)
-
-    App->>Bio: BiometricPrompt.authenticate()
-    Bio-->>App: Resultado de autenticación
-
-    alt Autenticación fallida, cancelada o no disponible
-        App-->>Wallet: setResult(RESULT_OK, STEP_UP_RESPONSE=declined)
-    else Autenticación exitosa
-        Note over App: Muestra pantalla de confirmación (card + Activar/Cancelar)
-        App->>Backend: POST /tokens/:id/app-to-app-activation<br/>{ device_id }
-        Backend->>Pomelo: POST /tokenization/v1/tokens/:id/app-to-app-activation
-        Pomelo->>Visa: Activa el token (Token Lifecycle API)
-        Visa-->>Pomelo: Resultado de activación
-        Pomelo-->>Backend: { external_token_id, activation_result }
-        Backend-->>App: activation_result (APPROVED/DECLINED/FAILURE)
-        App-->>Wallet: setResult(RESULT_OK, STEP_UP_RESPONSE=approved/declined/failure)
-    end
-```
-
-### Vista completa (arquitectura oficial de Google)
-
-El diagrama de arriba es nuestra implementación puntual. Este otro es el diagrama de arquitectura completo que publica Google en su [App-to-app verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv), adaptado con los nombres de este ejemplo. Muestra también la parte que no vemos ni implementamos nosotros: el handshake interno entre Google y Pomelo (como TSP) que ocurre por detrás de nuestras dos llamadas (`App Mobile -> Backend App` y `Backend App -> Pomelo`).
+Incluye también la parte que no vemos ni implementamos nosotros: el handshake interno entre Google y Pomelo (como TSP) que ocurre por detrás de nuestras dos llamadas (`App Mobile -> Backend App` y `Backend App -> Pomelo`). El detalle puntual de nuestra implementación (intent-filter, payload de Visa, `BiometricPrompt`, `STEP_UP_RESPONSE`) está en [`app/README.md`](app/README.md#app2app-idv-para-visa).
 
 ```mermaid
 sequenceDiagram

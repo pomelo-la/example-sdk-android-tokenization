@@ -6,9 +6,14 @@
 > Bajo ninguna circunstancia deberia usarse el codigo de este repositorio en produccion.
 
 
-Esta carpeta contiene una app Android de ejemplo que demuestra una integracion con Google Tap And Pay Push Provisioning. El foco esta en el flujo de la app cliente: renderizar el boton oficial de Google Wallet, verificar el estado de tokenizacion, lanzar `pushTokenize(...)`, generar credenciales de Pomelo y resolver el resultado devuelto por Google Wallet.
+Esta carpeta contiene una app Android de ejemplo que demuestra una integracion con Google Tap And Pay. Cubre dos flujos independientes:
 
-## Piezas clave
+- **Push Provisioning (manual)**: la app inicia el flujo — renderiza el boton oficial de Google Wallet, verifica el estado de tokenizacion, lanza `pushTokenize(...)`, genera credenciales de Pomelo y resuelve el resultado devuelto por Google Wallet.
+- **App2App (IDV) para Visa**: Google Wallet inicia el flujo — invoca la app para verificar la identidad del cardholder y activar un token existente. No usa el SDK Tap And Pay.
+
+## Push Provisioning (manual)
+
+La app inicia este flujo tocando el boton de Google Wallet; no tiene relacion con App2App (seccion siguiente).
 
 ### GoogleWalletProvisionButton
 
@@ -130,7 +135,7 @@ Referencia oficial: [Sample code for pushTokenize(...)](https://developers.googl
 > [!IMPORTANT]
 > La documentación oficial completa de Google sobre App2App / IDV Verification y la de Visa sobre App2App son de acceso restringido a partners autorizados (`developers.google.com/pay/issuers/request-access`), no públicas. Esta sección resume la implementación aplicada en este ejemplo; ante cualquier duda de comportamiento, consultá esa documentación de partner en vez de asumir.
 
-Este flujo es independiente del push provisioning manual descripto arriba. En vez de que la app inicie el `pushTokenize`, es **Google Wallet quien invoca la app** cuando Visa determina que un token necesita verificación de identidad del cardholder ("yellow path") antes de poder activarlo. La app nunca llama al SDK Tap And Pay en este flujo: es un handoff de Intent más una llamada HTTP al backend propio.
+Este flujo es **independiente** del Push Provisioning manual de la sección anterior: no comparten código ni Activity, y no hay que confundirlos. En vez de que la app inicie el `pushTokenize`, es **Google Wallet quien invoca la app** cuando Visa determina que un token necesita verificación de identidad del cardholder ("yellow path") antes de poder activarlo. La app nunca llama al SDK Tap And Pay en este flujo: es un handoff de Intent más una llamada HTTP al backend propio.
 
 ### Intent-filter
 
@@ -229,7 +234,9 @@ Con un build **debug** instalado, esto atraviesa todo el flujo real: valida el c
 > [!NOTE]
 > El diálogo de `BiometricPrompt` no se puede capturar con `adb exec-out screencap` (Android lo bloquea con `FLAG_SECURE`); la captura sale en negro, es esperado.
 
-## Referencias del SDK usadas por la app
+## Referencias del SDK usadas por Push Provisioning
+
+> Estas referencias son del flujo de Push Provisioning manual. Las de App2App/IDV son de acceso restringido a partners y ya se aclaran en su propia sección arriba.
 
 - [Provision Button API](https://developers.google.com/pay/issuers/apis/push-provisioning/android/provision-button-api)
 - [isTokenized](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#istokenized)

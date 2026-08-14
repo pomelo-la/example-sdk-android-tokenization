@@ -2,13 +2,19 @@ package com.example.example_google_upp.wallet
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import com.example.example_google_upp.BuildConfig
 import com.example.example_google_upp.model.AppToAppActivationResult
 import com.example.example_google_upp.ui.VisaAppToAppScreen
@@ -35,8 +41,11 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
  * backend to call Visa's Token Lifecycle API directly, and reports back only whether the
  * activation was approved/declined/failed — it does not return an authentication code (TAV),
  * which would be Visa's "Option 2".
+ *
+ * Extends FragmentActivity (instead of plain ComponentActivity, like MainActivity) because
+ * BiometricPrompt requires one.
  */
-class VisaAppToAppVerificationActivity : ComponentActivity() {
+class VisaAppToAppVerificationActivity : FragmentActivity() {
     private val viewModel: VisaAppToAppViewModel by viewModel()
     private var payload: VisaAppToAppPayload? = null
 
@@ -53,6 +62,13 @@ class VisaAppToAppVerificationActivity : ComponentActivity() {
         payload = parsedPayload
         viewModel.onPayloadParsed(parsedPayload)
 
+        promptCardholderAuthentication(
+            onSuccess = { showConfirmationScreen(parsedPayload) },
+            onFailure = { finishWithResult(AppToAppActivationResult.Declined) },
+        )
+    }
+
+    private fun showConfirmationScreen(parsedPayload: VisaAppToAppPayload?) {
         setContent {
             ExamplegoogleuppTheme(dynamicColor = true) {
                 val uiState by viewModel.uiState.collectAsState()
@@ -68,6 +84,62 @@ class VisaAppToAppVerificationActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /**
+     * Gates the confirmation screen behind cardholder authentication, per Google's App2App
+     * guidance that the issuer app must authenticate the cardholder before activating the token.
+     *
+     * BiometricPrompt is used here only as a runnable example — it is NOT a recommendation. Each
+     * issuer should pick whatever authentication strategy fits their own app (biometrics, face
+     * recognition, an already-active logged-in session, a PIN, etc.) instead of assuming this one.
+     */
+    private fun promptCardholderAuthentication(onSuccess: () -> Unit, onFailure: () -> Unit) {
+        // DEVICE_CREDENTIAL can only be combined with BIOMETRIC_STRONG from API 30 onward; below
+        // that, BiometricPrompt requires a negative button instead since there's no combined
+        // fallback.
+        val authenticators =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                BIOMETRIC_STRONG or DEVICE_CREDENTIAL
+            } else {
+                BIOMETRIC_STRONG
+            }
+
+        if (BiometricManager.from(this).canAuthenticate(authenticators) !=
+            BiometricManager.BIOMETRIC_SUCCESS
+        ) {
+            Log.e(TAG, "Cardholder authentication is not available on this device")
+            onFailure()
+            return
+        }
+
+        val promptInfo =
+            BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Confirm it's you")
+                .setSubtitle("Authenticate to activate your Pomelo card")
+                .setAllowedAuthenticators(authenticators)
+                .apply {
+                    if (authenticators == BIOMETRIC_STRONG) setNegativeButtonText("Cancel")
+                }
+                .build()
+
+        BiometricPrompt(
+                this,
+                ContextCompat.getMainExecutor(this),
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(
+                        result: BiometricPrompt.AuthenticationResult
+                    ) {
+                        onSuccess()
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        Log.e(TAG, "Cardholder authentication error: $errorCode $errString")
+                        onFailure()
+                    }
+                },
+            )
+            .authenticate(promptInfo)
     }
 
     /**

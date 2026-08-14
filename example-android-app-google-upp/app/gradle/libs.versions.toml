@@ -15,6 +15,7 @@ gson = "2.13.2"
 coroutines = "1.10.2"
 tapAndPay = "18.8.0"
 ktor = "2.3.12"
+biometric = "1.1.0"
 
 [libraries]
 glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
@@ -43,6 +44,7 @@ ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.r
 ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 google-play-services-tapandpay = { group = "com.google.android.gms", name = "play-services-tapandpay", version.ref = "tapAndPay" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

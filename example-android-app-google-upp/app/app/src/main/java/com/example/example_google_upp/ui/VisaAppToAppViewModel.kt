@@ -18,9 +18,9 @@ import kotlinx.coroutines.launch
  * the card being activated and, once the cardholder confirms, asks the backend to activate the
  * token against Visa.
  *
- * This sample "authenticates" the cardholder only by requiring an explicit tap on "Activar" in
- * this screen. A production app must add real cardholder authentication here (biometrics, an
- * active session check, etc.) before calling the backend.
+ * Cardholder authentication itself already happened before this screen is shown (see
+ * VisaAppToAppVerificationActivity.promptCardholderAuthentication) — the tap on "Activar" here is
+ * just the confirmation to proceed with the activation call.
  */
 class VisaAppToAppViewModel(private val backendService: BackendService) : ViewModel() {
     private val _uiState = MutableStateFlow(VisaAppToAppUiState())

@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.koin.android)
     implementation(libs.google.play.services.tapandpay)
+    implementation(libs.androidx.biometric)
     implementation(libs.gson)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.logging)

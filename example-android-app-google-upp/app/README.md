@@ -132,7 +132,7 @@ Referencia oficial: [Sample code for pushTokenize(...)](https://developers.googl
 
 ### Bounce Provisioning
 
-Bounce Provisioning le permite a Google Wallet redirigir al usuario desde la propia app de Wallet hacia esta app emisora, cuando la tarjeta ya es conocida por Google pero todavia no fue agregada. El requirement de UX de Google es que, tras la autenticacion, el usuario llegue directo a la pantalla del emisor con la lista de tarjetas elegibles para tokenizacion, sin overlays ni popovers antes de esa pantalla. No hay ningun requirement de cerrar la app emisora ni de volver a Google Wallet al terminar -- la app de ejemplo de Google tampoco lo hace, y la pantalla final de confirmacion ("Card added to Wallet...") la muestra el propio overlay de Google Pay durante el `pushTokenize`, no la app emisora.
+Bounce Provisioning le permite a Google Wallet redirigir al usuario desde la propia app de Wallet hacia esta app emisora, cuando la tarjeta ya es conocida por Google pero todavia no fue agregada. El requirement de UX de Google es que, tras la autenticacion, el usuario llegue directo a la pantalla del emisor con la lista de tarjetas elegibles para tokenizacion, sin overlays ni popovers antes de esa pantalla.
 
 La integracion tiene tres partes:
 

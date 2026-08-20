@@ -25,26 +25,14 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
 
-        <!--
-          Dedicated entry point for Google Wallet Bounce Provisioning. Google Wallet uses
-          queryIntentActivities to find issuer apps that declare ACTION_INITIATE_PROVISIONING, then
-          offers this app as an "Add card" shortcut for cards already known to Google.
+            <!--
+              Declares support for Google Wallet Bounce Provisioning. Google Wallet uses
+              queryIntentActivities to find issuer apps that declare this intent, then offers this
+              app as an "Add card" shortcut for cards already known to Google.
 
-          taskAffinity="" + launchMode="singleTask" keep this Activity in its own task, isolated
-          from MainActivity's back stack, so finish() always returns the user to Google Wallet
-          regardless of whether the app was already open (hot start) or not running (cold start).
-
-          Docs: https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning
-        -->
-        <activity
-            android:name=".BounceProvisioningActivity"
-            android:exported="true"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:taskAffinity=""
-            android:theme="@style/Theme.Examplegoogleupp">
+              Docs: https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning
+            -->
             <intent-filter>
                 <action android:name="com.google.android.gms.tapandpay.issuer.ACTION_INITIATE_PROVISIONING" />
 

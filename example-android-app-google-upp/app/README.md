@@ -6,7 +6,7 @@
 > Bajo ninguna circunstancia deberia usarse el codigo de este repositorio en produccion.
 
 
-Esta carpeta contiene una app Android de ejemplo que demuestra una integracion con Google Tap And Pay Push Provisioning. El foco esta en el flujo de la app cliente: renderizar el boton oficial de Google Wallet, verificar el estado de tokenizacion, lanzar `pushTokenize(...)`, generar credenciales de Pomelo y resolver el resultado devuelto por Google Wallet.
+Esta carpeta contiene una app Android de ejemplo que demuestra una integracion con Google Tap And Pay Push Provisioning. El foco esta en el flujo de la app cliente: renderizar el boton oficial de Google Wallet, verificar el estado de tokenizacion, lanzar `pushTokenize(...)`, generar credenciales de Pomelo, resolver el resultado devuelto por Google Wallet y soportar Bounce Provisioning.
 
 ## Piezas clave
 
@@ -25,20 +25,23 @@ Referencia oficial: [Provision Button API](https://developers.google.com/pay/iss
 - Registrar `registerForActivityResult(...)` para escuchar el resultado de la Activity de Google Wallet.
 - Registrar `TapAndPay.DataChangedListener` para refrescar el estado local cuando cambia Wallet.
 - Revalidar elegibilidad en `onResume`, porque el estado de Wallet puede cambiar fuera de la app.
-- Solicitar el `PendingIntent` de push tokenization y lanzarlo con `IntentSenderRequest`.
+- Detectar si la Activity fue lanzada por Google Wallet via Bounce Provisioning (`intent.action == ACTION_INITIATE_PROVISIONING`).
+- Solicitar el `PendingIntent` de push tokenization y lanzarlo con `IntentSenderRequest`, marcando `isBounceProvisioned` cuando corresponde.
 - Delegar la interpretacion del resultado en `PushProvisioningResultResolver`.
+- Cerrar la Activity (`finish()`) al resolver el resultado cuando el flujo vino de Bounce Provisioning, para devolver al usuario a Google Wallet.
 
 Referencias oficiales:
 
 - [Handling result callbacks](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#handling_result_callbacks)
 - [Data Change Callbacks](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#data_change_callbacks)
+- [Bounce Provisioning](https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning)
 
 ```mermaid
 flowchart TD
     A["User taps GoogleWalletProvisionButton"] --> B["MainActivity.launchProvisioningIntent(card)"]
-    B --> C["TapAndPayService.createPushTokenizePendingIntent(card)"]
+    B --> C["TapAndPayService.createPushTokenizePendingIntent(card, isBounceProvisioned)"]
     C --> D["Build PushTokenizeRequest"]
-    D --> E["Attach PomeloCredentialsGenerator"]
+    D --> E["Attach PomeloCredentialsGenerator + PushTokenizeExtraOptions"]
     E --> F["tapAndPayClient.pushTokenize(request)"]
     F --> G["Google Wallet provisioning flow"]
     G --> H["MainActivity registerForActivityResult callback"]
@@ -48,6 +51,11 @@ flowchart TD
     K -->|Success| L["Show success snackbar and refresh UI state"]
     K -->|Cancelled| M["Show cancellation snackbar"]
     K -->|Error| N["Show error snackbar"]
+    L --> O{"isBounceProvisioning?"}
+    M --> O
+    N --> O
+    O -->|Si| P["MainActivity.finish() -> vuelve a Google Wallet"]
+    O -->|No| Q["Usuario permanece en la app"]
 ```
 
 ### CardSearchViewModel.refreshWalletEligibility
@@ -84,9 +92,12 @@ flowchart TD
 
 Referencia oficial: [isTokenized](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#istokenized)
 
-`createPushTokenizePendingIntent(card)` obtiene el usuario desde `BackendService`, construye `UserAddress`, arma el `PushTokenizeRequest` y llama a `tapAndPayClient.pushTokenize(request)`. La solicitud pasa `PomeloCredentialsGenerator` como `PaymentCredentialsGenerator`, que es el componente que Google Wallet invoca cuando necesita credenciales OPC.
+`createPushTokenizePendingIntent(card, isBounceProvisioned)` obtiene el usuario desde `BackendService`, construye `UserAddress`, arma el `PushTokenizeRequest` y llama a `tapAndPayClient.pushTokenize(request)`. La solicitud pasa `PomeloCredentialsGenerator` como `PaymentCredentialsGenerator`, que es el componente que Google Wallet invoca cuando necesita credenciales OPC. Cuando `isBounceProvisioned` es `true`, la request tambien incluye `PushTokenizeExtraOptions.setIsBounceProvisioned(true)`, para que Google Wallet identifique que el token se agrego a traves del flujo de Bounce Provisioning.
 
-Referencia oficial: [pushTokenize](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#pushtokenize)
+Referencias oficiales:
+
+- [pushTokenize](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#pushtokenize)
+- [Bounce Provisioning](https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning)
 
 ### PomeloCredentialsGenerator
 
@@ -125,12 +136,44 @@ Este handler es intencionalmente basico para la app de ejemplo: no intenta model
 
 Referencia oficial: [Sample code for pushTokenize(...)](https://developers.google.com/pay/issuers/apis/push-provisioning/android/upgrade_to_upp#sample_code_for_pushtokenize)
 
+### Bounce Provisioning
+
+Bounce Provisioning le permite a Google Wallet redirigir al usuario desde la propia app de Wallet hacia esta app emisora, cuando la tarjeta ya es conocida por Google pero todavia no fue agregada. El objetivo es que el usuario llegue directo a la pantalla de "Agregar a Google Wallet" de esta app, sin navegacion adicional.
+
+La integracion tiene tres partes:
+
+1. **Manifest**: se declara un `intent-filter` con la accion `com.google.android.gms.tapandpay.issuer.ACTION_INITIATE_PROVISIONING` y la categoria `DEFAULT` en `MainActivity`. Google Wallet usa `queryIntentActivities` para descubrir que apps emisoras lo soportan.
+2. **MainActivity**: al recibir ese intent, la Activity no agrega ningun paso de navegacion extra -- el buscador de tarjetas ya se muestra de entrada cuando no hay una tarjeta seleccionada -- pero guarda el flag `isBounceProvisioning` para propagarlo al `pushTokenize` y para cerrarse (`finish()`) una vez resuelto el resultado, devolviendo al usuario a Google Wallet.
+3. **TapAndPayService**: agrega `PushTokenizeExtraOptions.setIsBounceProvisioned(true)` al `PushTokenizeRequest` cuando el flag esta activo.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant GW as Google Wallet
+    participant IA as Esta app (Issuer app)
+    participant TAP as Tap And Pay SDK
+
+    User->>GW: Presiona "Agregar tarjeta de pago"
+    Note over GW: Descubre apps emisoras con ACTION_INITIATE_PROVISIONING
+    User->>GW: Elige esta app
+    GW->>IA: Lanza MainActivity con ACTION_INITIATE_PROVISIONING
+    Note over IA: Muestra directo la pantalla de agregar tarjeta
+    User->>IA: Presiona "Add to Google Wallet"
+    IA->>TAP: pushTokenize(..., PushTokenizeExtraOptions(isBounceProvisioned=true))
+    TAP-->>IA: onActivityResult
+    IA-->>User: Muestra confirmacion
+    IA->>GW: finish() -> vuelve a Google Wallet
+```
+
+Referencia oficial: [Bounce Provisioning](https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning)
+
 ## Referencias del SDK usadas por la app
 
 - [Provision Button API](https://developers.google.com/pay/issuers/apis/push-provisioning/android/provision-button-api)
 - [isTokenized](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#istokenized)
 - [Data Change Callbacks](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#data_change_callbacks)
 - [pushTokenize](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#pushtokenize)
+- [Bounce Provisioning](https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning)
 - [Handling result callbacks](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#handling_result_callbacks)
 - [PaymentCredentialsGenerator interface](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#paymentcredentialsgenerator_interface)
 - [GeneratePaymentCredentialsRequest interface](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#generatepaymentcredentialsrequest_interface)

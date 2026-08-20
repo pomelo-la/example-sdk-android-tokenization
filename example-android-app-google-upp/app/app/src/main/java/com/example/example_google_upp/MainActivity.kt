@@ -29,12 +29,21 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
  * Its responsibilities are to keep wallet state synchronized with `DataChangedListener`, register
  * the Activity result callback for push tokenization, and launch the Google Wallet intent returned
  * by the provisioning gateway.
+ *
+ * It also handles Google Wallet's Bounce Provisioning flow: when this Activity is launched via
+ * `ACTION_INITIATE_PROVISIONING` (declared in the manifest), the card search screen is shown as
+ * usual -- there is no extra navigation step, per Google's frictionless-launch requirement -- but
+ * the resulting `pushTokenize` call is flagged as bounce-provisioned and the Activity is closed
+ * once provisioning finishes so the user lands back on Google Wallet.
+ *
+ * Docs: https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning
  */
 class MainActivity : ComponentActivity() {
     private val viewModel: CardSearchViewModel by viewModel()
     private val walletProvisioningGateway: WalletProvisioningGateway by inject()
     private lateinit var pushProvisioningLauncher: ActivityResultLauncher<IntentSenderRequest>
     private var walletDataChangedListener: TapAndPay.DataChangedListener? = null
+    private var isBounceProvisioning = false
 
     /**
      * Uses registerForActivityResult to listen for Google Wallet's push-tokenize Activity result.
@@ -44,6 +53,8 @@ class MainActivity : ComponentActivity() {
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        isBounceProvisioning = intent.isBounceProvisioningIntent()
+
         val pushProvisioningContract = ActivityResultContracts.StartIntentSenderForResult()
         pushProvisioningLauncher =
             registerForActivityResult(pushProvisioningContract) { result ->
@@ -103,7 +114,11 @@ class MainActivity : ComponentActivity() {
     private fun launchProvisioningIntent(card: Card) {
         lifecycleScope.launch {
             try {
-                val pendingIntent = walletProvisioningGateway.createPushTokenizePendingIntent(card)
+                val pendingIntent =
+                    walletProvisioningGateway.createPushTokenizePendingIntent(
+                        card = card,
+                        isBounceProvisioned = isBounceProvisioning,
+                    )
                 val request = IntentSenderRequest.Builder(pendingIntent).build()
                 pushProvisioningLauncher.launch(request)
             } catch (error: Exception) {
@@ -120,10 +135,24 @@ class MainActivity : ComponentActivity() {
     /**
      * Handles the Activity result returned by Google Wallet after push tokenization finishes.
      *
+     * When this Activity was launched from Bounce Provisioning, it closes itself once the result is
+     * handled so the user is returned to Google Wallet instead of staying on the issuer app.
+     *
      * Docs:
      * https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#handling_result_callbacks
      */
     private fun handlePushTokenizeResult(resultCode: Int, data: Intent?) {
         viewModel.onProvisioningResult(PushProvisioningResultResolver.resolve(resultCode, data))
+        if (isBounceProvisioning) {
+            finish()
+        }
     }
 }
+
+/**
+ * Whether this Intent launched the Activity through Google Wallet's Bounce Provisioning flow.
+ *
+ * Docs: https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning
+ */
+private fun Intent.isBounceProvisioningIntent(): Boolean =
+    action == "com.google.android.gms.tapandpay.issuer.ACTION_INITIATE_PROVISIONING"

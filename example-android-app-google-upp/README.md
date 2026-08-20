@@ -27,6 +27,7 @@ La app Android demuestra la integracion de Tap And Pay del lado cliente:
 - lanzar `pushTokenize(...)`
 - generar credenciales de pago mediante `PomeloCredentialsGenerator`
 - manejar el resultado devuelto por Google Wallet
+- soportar Bounce Provisioning, para que Google Wallet pueda redirigir al usuario a esta app y agregar la tarjeta sin navegacion adicional
 
 La app backend demuestra la parte del servidor requerida por el ejemplo:
 

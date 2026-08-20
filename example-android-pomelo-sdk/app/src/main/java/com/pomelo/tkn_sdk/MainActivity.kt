@@ -26,6 +26,18 @@ class MainActivity : ComponentActivity() {
                 android.graphics.Color.TRANSPARENT,
             )
     )
-    setContent { Tkn_sdkTheme { HomeComposable(pushProvisioning = pushProvisioning) } }
+
+    // Google Wallet opens this activity through ACTION_INITIATE_PROVISIONING when the user
+    // starts the flow from Wallet instead of from this app (Bounce Provisioning).
+    val isBounceProvisioning = PomeloPushProvisioning.isBounceProvisioningIntent(intent)
+
+    setContent {
+      Tkn_sdkTheme {
+        HomeComposable(
+            pushProvisioning = pushProvisioning,
+            isBounceProvisioning = isBounceProvisioning,
+        )
+      }
+    }
   }
 }

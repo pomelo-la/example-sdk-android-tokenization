@@ -18,17 +18,21 @@ La app usa la Provision Button API con integracion programatica mediante `Provis
 
 Referencia oficial: [Provision Button API](https://developers.google.com/pay/issuers/apis/push-provisioning/android/provision-button-api)
 
-### MainActivity
+### WalletProvisioningActivity, MainActivity y BounceProvisioningActivity
 
-[MainActivity.kt](app/src/main/java/com/example/example_google_upp/MainActivity.kt) conecta la UI de Compose con el flujo de Tap And Pay. Sus responsabilidades son:
+[WalletProvisioningActivity.kt](app/src/main/java/com/example/example_google_upp/WalletProvisioningActivity.kt) es la clase base abstracta que conecta la UI de Compose con el flujo de Tap And Pay. Sus responsabilidades son:
 
 - Registrar `registerForActivityResult(...)` para escuchar el resultado de la Activity de Google Wallet.
 - Registrar `TapAndPay.DataChangedListener` para refrescar el estado local cuando cambia Wallet.
 - Revalidar elegibilidad en `onResume`, porque el estado de Wallet puede cambiar fuera de la app.
-- Detectar si la Activity fue lanzada por Google Wallet via Bounce Provisioning (`intent.action == ACTION_INITIATE_PROVISIONING`).
-- Solicitar el `PendingIntent` de push tokenization y lanzarlo con `IntentSenderRequest`, marcando `isBounceProvisioned` cuando corresponde.
+- Solicitar el `PendingIntent` de push tokenization y lanzarlo con `IntentSenderRequest`, marcando `isBounceProvisioned` segun la subclase.
 - Delegar la interpretacion del resultado en `PushProvisioningResultResolver`.
-- Cerrar la Activity (`finish()`) al resolver el resultado cuando el flujo vino de Bounce Provisioning, para devolver al usuario a Google Wallet.
+- Cerrar la Activity (`finish()`) al resolver el resultado cuando `isBounceProvisioned` es `true`.
+
+Dos Activities concretas la extienden, cada una fijando `isBounceProvisioned` de forma estatica (no se infiere del Intent recibido):
+
+- [MainActivity.kt](app/src/main/java/com/example/example_google_upp/MainActivity.kt): entry point normal de la app (`isBounceProvisioned = false`).
+- [BounceProvisioningActivity.kt](app/src/main/java/com/example/example_google_upp/BounceProvisioningActivity.kt): entry point dedicado a Bounce Provisioning (`isBounceProvisioned = true`). Ver la seccion [Bounce Provisioning](#bounce-provisioning) para el porque de separarla en su propia Activity/task.
 
 Referencias oficiales:
 
@@ -38,24 +42,24 @@ Referencias oficiales:
 
 ```mermaid
 flowchart TD
-    A["User taps GoogleWalletProvisionButton"] --> B["MainActivity.launchProvisioningIntent(card)"]
+    A["User taps GoogleWalletProvisionButton"] --> B["WalletProvisioningActivity.launchProvisioningIntent(card)"]
     B --> C["TapAndPayService.createPushTokenizePendingIntent(card, isBounceProvisioned)"]
     C --> D["Build PushTokenizeRequest"]
     D --> E["Attach PomeloCredentialsGenerator + PushTokenizeExtraOptions"]
     E --> F["tapAndPayClient.pushTokenize(request)"]
     F --> G["Google Wallet provisioning flow"]
-    G --> H["MainActivity registerForActivityResult callback"]
+    G --> H["registerForActivityResult callback"]
     H --> I["PushProvisioningResultResolver.resolve(...)"]
     I --> J["CardSearchViewModel.onProvisioningResult(...)"]
     J --> K{"Resolved result"}
     K -->|Success| L["Show success snackbar and refresh UI state"]
     K -->|Cancelled| M["Show cancellation snackbar"]
     K -->|Error| N["Show error snackbar"]
-    L --> O{"isBounceProvisioning?"}
+    L --> O{"isBounceProvisioned?"}
     M --> O
     N --> O
-    O -->|Si| P["MainActivity.finish() -> vuelve a Google Wallet"]
-    O -->|No| Q["Usuario permanece en la app"]
+    O -->|Si BounceProvisioningActivity| P["finish() -> vuelve a Google Wallet"]
+    O -->|No MainActivity| Q["Usuario permanece en la app"]
 ```
 
 ### CardSearchViewModel.refreshWalletEligibility
@@ -126,7 +130,7 @@ Referencias oficiales:
 
 [PushProvisioningResultResolver.kt](app/src/main/java/com/example/example_google_upp/wallet/PushProvisioningResultResolver.kt) traduce el resultado de Google Wallet al modelo interno `PushProvisioningResult`.
 
-`MainActivity` delega en este resolver el `activityResultCode` y el `Intent` recibidos desde Google Wallet. El resolver lee `TapAndPay.EXTRA_PUSH_TOKENIZE_RESULT` cuando esta disponible y devuelve uno de tres resultados simples para que el `ViewModel` actualice la UI:
+`WalletProvisioningActivity` delega en este resolver el `activityResultCode` y el `Intent` recibidos desde Google Wallet. El resolver lee `TapAndPay.EXTRA_PUSH_TOKENIZE_RESULT` cuando esta disponible y devuelve uno de tres resultados simples para que el `ViewModel` actualice la UI:
 
 - `Success`: la tokenizacion fue exitosa.
 - `Cancelled`: Tap And Pay devolvio un estado de cancelacion, como `TAP_AND_PAY_USER_CANCELED_FLOW` o `CANCELED`.
@@ -142,27 +146,36 @@ Bounce Provisioning le permite a Google Wallet redirigir al usuario desde la pro
 
 La integracion tiene tres partes:
 
-1. **Manifest**: se declara un `intent-filter` con la accion `com.google.android.gms.tapandpay.issuer.ACTION_INITIATE_PROVISIONING` y la categoria `DEFAULT` en `MainActivity`. Google Wallet usa `queryIntentActivities` para descubrir que apps emisoras lo soportan.
-2. **MainActivity**: al recibir ese intent, la Activity no agrega ningun paso de navegacion extra -- el buscador de tarjetas ya se muestra de entrada cuando no hay una tarjeta seleccionada -- pero guarda el flag `isBounceProvisioning` para propagarlo al `pushTokenize` y para cerrarse (`finish()`) una vez resuelto el resultado, devolviendo al usuario a Google Wallet.
+1. **Manifest**: se declara un `intent-filter` con la accion `com.google.android.gms.tapandpay.issuer.ACTION_INITIATE_PROVISIONING` y la categoria `DEFAULT`, pero **no** en `MainActivity` sino en una Activity dedicada, `BounceProvisioningActivity`. Google Wallet usa `queryIntentActivities` para descubrir que apps emisoras lo soportan.
+2. **BounceProvisioningActivity**: al recibir ese intent, muestra la misma UI que `MainActivity` (comparten `WalletProvisioningActivity`) sin ningun paso de navegacion extra -- el buscador de tarjetas ya se muestra de entrada cuando no hay una tarjeta seleccionada -- pero fija `isBounceProvisioned = true`, que se propaga al `pushTokenize` y hace que la Activity se cierre (`finish()`) una vez resuelto el resultado, devolviendo al usuario a Google Wallet.
 3. **TapAndPayService**: agrega `PushTokenizeExtraOptions.setIsBounceProvisioned(true)` al `PushTokenizeRequest` cuando el flag esta activo.
+
+#### Por que una Activity separada (cold start vs. hot start)
+
+`BounceProvisioningActivity` esta declarada en el manifest con `android:launchMode="singleTask"` y `android:taskAffinity=""`, de forma que siempre corre en su propia task, aislada de `MainActivity`. Esto importa porque el comportamiento de Android difiere segun si la app ya esta abierta o no:
+
+- **Cold start** (proceso no esta corriendo): Google Wallet crea una task nueva y todo funciona sin sorpresas aunque las Activities compartieran task.
+- **Hot start** (la app ya tiene una task viva, en foreground o background): si `ACTION_INITIATE_PROVISIONING` lo manejara `MainActivity` con su `launchMode` por defecto (`standard`) y sin `taskAffinity` propio, Android apilaria una **nueva instancia** de `MainActivity` arriba de la que ya existe, dentro de la misma task. El `finish()` de esa nueva instancia no devolveria al usuario a Google Wallet, sino a la instancia vieja de `MainActivity` que sigue debajo en el back stack -- justo lo opuesto a lo que Bounce Provisioning busca.
+
+Al aislar el entry point de bounce en su propia task, `finish()` siempre destruye esa task completa y el usuario vuelve a Google Wallet, sin importar si `MainActivity` ya estaba abierta.
 
 ```mermaid
 sequenceDiagram
     actor User
     participant GW as Google Wallet
-    participant IA as Esta app (Issuer app)
+    participant IA as BounceProvisioningActivity (task aislada)
     participant TAP as Tap And Pay SDK
 
     User->>GW: Presiona "Agregar tarjeta de pago"
     Note over GW: Descubre apps emisoras con ACTION_INITIATE_PROVISIONING
     User->>GW: Elige esta app
-    GW->>IA: Lanza MainActivity con ACTION_INITIATE_PROVISIONING
-    Note over IA: Muestra directo la pantalla de agregar tarjeta
+    GW->>IA: Lanza BounceProvisioningActivity con ACTION_INITIATE_PROVISIONING
+    Note over IA: Muestra directo la pantalla de agregar tarjeta,<br/>sin importar si MainActivity ya estaba abierta
     User->>IA: Presiona "Add to Google Wallet"
     IA->>TAP: pushTokenize(..., PushTokenizeExtraOptions(isBounceProvisioned=true))
     TAP-->>IA: onActivityResult
     IA-->>User: Muestra confirmacion
-    IA->>GW: finish() -> vuelve a Google Wallet
+    IA->>GW: finish() -> destruye la task aislada y vuelve a Google Wallet
 ```
 
 Referencia oficial: [Bounce Provisioning](https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning)

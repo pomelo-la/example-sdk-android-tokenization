@@ -2,7 +2,7 @@
 
 El módulo **pushprovisioning** es una biblioteca de Android SDK desarrollada por Pomelo que permite integrar la funcionalidad de **Push Provisioning** de Google Pay en aplicaciones Android.
 
-Construido sobre el **Google Pay TapAndPay SDK**, ofrece **UI Components** pre-diseñados para Jetpack Compose que facilitan la integración. El módulo incluye **soporte multi-red** para Visa y Mastercard, proporcionando una experiencia de usuario fluida y segura para la tokenización
+Construido sobre el **Google Pay TapAndPay SDK**, ofrece **UI Components** pre-diseñados para Jetpack Compose que facilitan la integración. El módulo incluye **soporte multi-red** para Visa y Mastercard, soporte para **Bounce Provisioning** (flujo iniciado desde Google Wallet), proporcionando una experiencia de usuario fluida y segura para la tokenización
 automática de tarjetas.
 
 <div align="center">
@@ -62,8 +62,8 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-  implementation 'com.google.android.gms:play-services-tapandpay:18.8.0'
-  implementation 'com.pomelo:push-provisioning:2.0.0'
+  implementation 'com.google.android.gms:play-services-tapandpay:18.10.0'
+  implementation 'com.pomelo:push-provisioning:2.1.0'
 }
 ```
 
@@ -242,6 +242,7 @@ fun GoogleWalletButtonComposable(
     card: PushProvisioningCard,
     accessTokenProvider: suspend () -> String,
     asBadge: Boolean = false,
+    isBounceProvisioning: Boolean = false,
     onEffect: (GWalletEffect) -> Unit = {},
     alreadyInWalletComposable: (@Composable () -> Unit)? = null,
 )
@@ -253,6 +254,7 @@ fun GoogleWalletButtonComposable(
 | `card`                      | `PushProvisioningCard`      | ✅         | -       | Datos de la tarjeta a tokenizar                                                     |
 | `accessTokenProvider`       | `suspend () -> String`      | ✅         | -       | Función suspendida que retorna el End User Token                                    |
 | `asBadge`                   | `Boolean`                   | ❌         | `false` | `true` para mostrar como badge pequeño, `false` para botón completo                |
+| `isBounceProvisioning`      | `Boolean`                   | ❌         | `false` | `true` cuando el flujo se inició desde Google Wallet (ver [Bounce Provisioning](#bounce-provisioning)) |
 | `onEffect`                  | `(GWalletEffect) -> Unit`   | ❌         | `{}`    | Callback para recibir eventos del flujo (ver `GWalletEffect`)                      |
 | `alreadyInWalletComposable` | `(@Composable () -> Unit)?` | ❌         | `null`  | UI personalizada cuando la tarjeta ya está en la wallet. `null` usa `AlreadyInWallet()` por defecto |
 
@@ -373,6 +375,94 @@ Valores posibles de `GWalletEffect.Error.tapAndPayStatusCode`:
 | `TAP_AND_PAY_PAYMENT_CREDENTIALS_GENERATION_FAILED` | 15032 | El método `PaymentCredentialsGenerator.generate` falló al retornar las credenciales de pago        |
 | `TAP_AND_PAY_INELIGIBLE_FOR_AUXILIARY_TOKENIZATION` | 15033 | La tarjeta no es elegible para tokenización auxiliar con el TSP auxiliar                           |
 | `TAP_AND_PAY_AUXILIARY_TOKENIZATION_DECLINED`     | 15034 | El TSP auxiliar rechazó el pedido de tokenización auxiliar (red path)                               |
+
+## Bounce Provisioning
+
+Bounce Provisioning es el camino inverso al push provisioning tradicional: el usuario arranca en la
+app de **Google Wallet**, elige "Agregar tarjeta de pago", y Wallet le muestra la lista de apps de
+emisores instaladas en el dispositivo que soportan este flujo. Al elegir una, Wallet abre esa app
+directamente en la pantalla de agregar tarjeta.
+
+El SDK reporta a Google que la tokenización vino de este rebote mediante el parámetro
+`isBounceProvisioning` del composable. Este ejemplo integra el flujo completo en
+[`MainActivity.kt`](app/src/main/java/com/pomelo/tkn_sdk/MainActivity.kt) y
+[`HomeScreen.kt`](app/src/main/java/com/pomelo/tkn_sdk/ui/screens/home/HomeScreen.kt).
+
+> [!IMPORTANT]
+> Para que tu app aparezca en la lista de Google Wallet, el package name tiene que estar habilitado
+> por Google además del [allowlisting](https://developers.google.com/pay/issuers/apis/push-provisioning/android/allowlist)
+> habitual de TapAndPay. Declarar el intent no alcanza por sí solo.
+
+### 1. Declarar el intent en tu `AndroidManifest.xml`
+
+Google Wallet descubre las apps compatibles buscando esta acción. La `<category>` es obligatoria: sin
+ella tu app no va a aparecer en la lista.
+
+```xml
+<activity
+    android:name=".MainActivity"
+    android:exported="true">
+
+    <intent-filter>
+        <action android:name="com.google.android.gms.tapandpay.issuer.ACTION_INITIATE_PROVISIONING" />
+
+        <category android:name="android.intent.category.DEFAULT" />
+    </intent-filter>
+</activity>
+```
+
+La activity que declares tiene que llevar al usuario **directo** a la pantalla donde está el botón
+"Add to Google Wallet", sin navegación intermedia. Si el usuario tiene una sola tarjeta, aterrizalo
+en esa; si tiene varias, mostrale el selector. Google pide explícitamente que la experiencia sea sin
+fricción.
+
+### 2. Detectar el intent y pasar el flag al composable
+
+```kotlin
+import com.pomelo.sdk.pushprovisioning.PomeloPushProvisioning
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val isBounceProvisioning = PomeloPushProvisioning.isBounceProvisioningIntent(intent)
+
+        setContent {
+            MyCardScreen(isBounceProvisioning = isBounceProvisioning)
+        }
+    }
+}
+```
+
+```kotlin
+GoogleWalletButtonComposable(
+    pushProvisioning = pushProvisioning,
+    card = card,
+    accessTokenProvider = accessTokenProvider,
+    isBounceProvisioning = isBounceProvisioning,
+)
+```
+
+> [!WARNING]
+> El flag describe **cómo se originó la sesión de navegación**, no la pantalla actual. Si la activity
+> que recibe el intent no es la misma que muestra el botón, tenés que propagar el `Boolean` hasta
+> ella (por `Intent` extra, argumento de navegación, etc.). El SDK no puede detectarlo por su cuenta
+> porque no conoce la estructura de navegación de tu app.
+
+### API
+
+| Miembro                                                     | Tipo                   | Descripción                                                                      |
+| ------------------------------------------------------------ | ---------------------- | --------------------------------------------------------------------------------- |
+| `PomeloPushProvisioning.isBounceProvisioningIntent(intent)` | `(Intent?) -> Boolean` | `true` si el `Intent` proviene del flujo de Bounce Provisioning de Google Wallet |
+| `PomeloPushProvisioning.ACTION_INITIATE_PROVISIONING`       | `String`               | La acción declarada en el `<intent-filter>`, por si necesitás compararla a mano |
+
+### Limitación conocida
+
+Cuando la tarjeta ya tiene un token en la wallet en estado no activo, el SDK usa el flujo `tokenize`
+de TapAndPay en lugar de `pushTokenize`. La API `TokenizeRequest` de Google no acepta opciones
+extra, así que en ese caso el flag de bounce no se puede reportar. El SDK deja un log de nivel `WARN`
+cuando esto ocurre. En la práctica no debería afectar, porque el flujo bounce típico es agregar una
+tarjeta nueva.
 
 ## Flujo de autenticación
 

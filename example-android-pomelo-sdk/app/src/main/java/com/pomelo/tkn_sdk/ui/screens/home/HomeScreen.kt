@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeComposable(
   pushProvisioning: PomeloPushProvisioning,
+  isBounceProvisioning: Boolean = false,
   viewModel: HomeViewModel = viewModel()
 ) {
   var isGPayLoading by remember { mutableStateOf(false) }
@@ -77,6 +78,7 @@ fun HomeComposable(
                 lastFour = selectedCard.lastFour,
                 brand = selectedCard.brand,
               ),
+              isBounceProvisioning = isBounceProvisioning,
 
               onEffect = { effect ->
                 when (effect) {

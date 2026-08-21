@@ -10,6 +10,7 @@ import com.example.example_google_upp.wallet.models.toTapAndPayUserAddress
 import com.google.android.gms.tapandpay.TapAndPay
 import com.google.android.gms.tapandpay.TapAndPayClient
 import com.google.android.gms.tapandpay.issuer.IsTokenizedRequest
+import com.google.android.gms.tapandpay.issuer.PushTokenizeExtraOptions
 import com.google.android.gms.tapandpay.issuer.PushTokenizeRequest
 import com.google.android.gms.tasks.Task
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -48,10 +49,18 @@ class TapAndPayService(
      * PomeloCredentialsGenerator is passed as the PaymentCredentialsGenerator so Tap And Pay can
      * ask the issuer backend for the Google OPC during the push-tokenize flow.
      *
+     * When [isBounceProvisioned] is true, `PushTokenizeExtraOptions` is attached to the request so
+     * Google Wallet knows this token was added through the Bounce Provisioning flow (i.e. this app
+     * was launched via `ACTION_INITIATE_PROVISIONING`).
+     *
      * Docs:
      * https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#pushtokenize
+     * https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning
      */
-    override suspend fun createPushTokenizePendingIntent(card: Card): PendingIntent {
+    override suspend fun createPushTokenizePendingIntent(
+        card: Card,
+        isBounceProvisioned: Boolean,
+    ): PendingIntent {
         val user = backendService.getUser(card.userId)
 
         val request =
@@ -66,6 +75,11 @@ class TapAndPayService(
                         card = card,
                         backendService = backendService,
                     )
+                )
+                .setPushTokenizeExtraOptions(
+                    PushTokenizeExtraOptions.newBuilder()
+                        .setIsBounceProvisioned(isBounceProvisioned)
+                        .build()
                 )
                 .build()
 

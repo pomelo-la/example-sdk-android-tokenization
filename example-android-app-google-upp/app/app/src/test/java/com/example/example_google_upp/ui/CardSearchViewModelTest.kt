@@ -409,8 +409,10 @@ class CardSearchViewModelTest {
             return isTokenized
         }
 
-        override suspend fun createPushTokenizePendingIntent(card: Card): PendingIntent =
-            error("Unexpected push tokenize request for ${card.cardId}")
+        override suspend fun createPushTokenizePendingIntent(
+            card: Card,
+            isBounceProvisioned: Boolean,
+        ): PendingIntent = error("Unexpected push tokenize request for ${card.cardId}")
 
         override fun registerDataChangedListener(listener: TapAndPay.DataChangedListener) = Unit
 

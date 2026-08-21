@@ -62,8 +62,8 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-  implementation 'com.google.android.gms:play-services-tapandpay:18.8.0'
-  implementation 'com.pomelo:push-provisioning:2.0.0'
+  implementation 'com.google.android.gms:play-services-tapandpay:18.10.0'
+  implementation 'com.pomelo:push-provisioning:2.1.0'
 }
 ```
 

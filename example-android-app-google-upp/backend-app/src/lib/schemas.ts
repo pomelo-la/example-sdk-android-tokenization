@@ -31,3 +31,9 @@ export const visaPushProvisioningBodySchema = pushProvisioningBodySchema.extend(
 export type PushProvisioningRequest = z.infer<
 	typeof pushProvisioningBodySchema
 >;
+
+export const activateTokenBodySchema = z.object({
+	motive: z.enum(["APP_TO_APP_ACTIVATION"]),
+});
+
+export type ActivateTokenRequest = z.infer<typeof activateTokenBodySchema>;

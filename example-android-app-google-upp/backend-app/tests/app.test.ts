@@ -237,3 +237,66 @@ test("axios errors from Pomelo are forwarded as-is", async () => {
   assert.equal(response.status, 404);
   assert.equal(await response.text(), "");
 });
+
+test("POST /tokens/:id/activate forwards payload to Pomelo", async () => {
+  mockPomeloHttp();
+  const response = await app.request(
+    "http://localhost/tokens/tok-123/activate",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        motive: "APP_TO_APP_ACTIVATION",
+      }),
+    },
+  );
+
+  assert.equal(response.status, 202);
+  assert.deepEqual(await response.json(), {
+    data: {
+      provider: "MASTERCARD",
+      payload: {
+        motive: "APP_TO_APP_ACTIVATION",
+      },
+    },
+  });
+});
+
+test("POST /tokens/:id/activate validates motive field", async () => {
+  mockPomeloHttp();
+  const response = await app.request(
+    "http://localhost/tokens/tok-123/activate",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        motive: "INVALID_MOTIVE",
+      }),
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.ok((await response.text()).includes("motive"));
+});
+
+test("POST /tokens/:id/activate validates token id param", async () => {
+  mockPomeloHttp();
+  const response = await app.request(
+    "http://localhost/tokens//activate",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        motive: "APP_TO_APP_ACTIVATION",
+      }),
+    },
+  );
+
+  assert.equal(response.status, 404);
+});

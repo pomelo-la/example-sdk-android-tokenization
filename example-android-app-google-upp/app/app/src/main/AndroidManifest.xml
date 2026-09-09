@@ -39,6 +39,25 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!--
+          App-to-app verification (IDV) invocada por Google Wallet cuando hace falta confirmar
+          la identidad del cliente (Yellow Path) durante el agregado de una tarjeta Visa.
+
+          Visa define un formato fijo para la acción: "{package name}.a2a".
+
+          Docs: https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv
+        -->
+        <activity
+            android:name=".a2a.AppToAppVerificationActivity"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="com.example.example_google_upp.a2a" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

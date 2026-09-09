@@ -161,6 +161,54 @@ sequenceDiagram
 
 Referencia oficial: [Bounce Provisioning](https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning)
 
+### App-to-App Verification (A2A)
+
+App-to-App Verification (también conocido como App-to-App IDV) permite a Google Wallet invocar directamente la app del emisor cuando necesita verificar la identidad del titular antes de activar un token (Yellow Path). En lugar de enviar un OTP por SMS/email, Google Wallet lanza esta app con el payload de Visa en Base64URL.
+
+La integración tiene cuatro partes:
+
+1. **Manifest**: se declara un `intent-filter` con la acción `com.example.example_google_upp.a2a` (formato fijo definido por Visa) y la categoría `DEFAULT` en `AppToAppVerificationActivity`. Google Wallet usa esta acción para invocar la app emisora.
+2. **AppToAppVerificationActivity**: recibe el Intent, parsea el payload de Visa desde `Intent.EXTRA_TEXT`, valida que el caller sea `com.google.android.gms`, y coordina el flujo de autenticación y activación.
+3. **AppToAppViewModel**: gestiona el estado de UI ([AppToAppUiState]), simula la autenticación del cliente (en producción aquí iría login/biometría real), y llama a `BackendService.activateToken()` para activar el token en Pomelo.
+4. **Resultado**: tras la activación (o si el usuario cancela), se devuelve el resultado a Google Wallet vía `setResult(RESULT_OK)` con el extra `STEP_UP_RESPONSE` (`"approved"`, `"declined"` o `"failure"`).
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant GW as Google Wallet
+    participant A2A as AppToAppVerificationActivity
+    participant VM as AppToAppViewModel
+    participant BS as BackendService
+    participant Pomelo as Pomelo
+
+    User->>GW: Agrega tarjeta manualmente
+    Note over GW: Yellow Path: requiere verificación
+    GW->>A2A: Intent con action .a2a y payload Base64URL
+    A2A->>A2A: Parsea payload y valida caller
+    A2A->>VM: init(payload, isValidCaller)
+    VM->>A2A: Estado: AwaitingAuthentication
+    A2A->>User: Muestra •••• •••• •••• 1234
+    User->>A2A: Simular autenticación
+    A2A->>VM: onSimulatedAuthenticationConfirmed()
+    VM->>A2A: Estado: Authenticated
+    User->>A2A: Presiona "Activar"
+    A2A->>VM: onActivate()
+    VM->>A2A: Estado: Activating
+    VM->>BS: activateToken(tokenId, APP_TO_APP_ACTIVATION)
+    BS->>Pomelo: POST /tokens/{id}/activate
+    Pomelo-->>BS: 202 Accepted
+    BS-->>VM: Éxito
+    VM->>A2A: Estado: Finished(Approved)
+    VM->>A2A: Emite finalResult
+    A2A->>GW: setResult(STEP_UP_RESPONSE: "approved")
+```
+
+Nota importante: la autenticación del cliente (login, biometría, PIN) queda a criterio del emisor. Este ejemplo usa una simulación para mantener el foco en el cableado de A2A; en producción debe reemplazarse por el mecanismo real de autenticación.
+
+Referencias oficiales:
+- [App-to-App Verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv)
+- Guía interna de Pomelo: `pomelo-docs/docs/modules/tokenization/google-pay-a2a.es.md`
+
 ## Referencias del SDK usadas por la app
 
 - [Provision Button API](https://developers.google.com/pay/issuers/apis/push-provisioning/android/provision-button-api)
@@ -168,6 +216,7 @@ Referencia oficial: [Bounce Provisioning](https://developers.google.com/pay/issu
 - [Data Change Callbacks](https://developers.google.com/pay/issuers/apis/push-provisioning/android/reading-wallet#data_change_callbacks)
 - [pushTokenize](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#pushtokenize)
 - [Bounce Provisioning](https://developers.google.com/pay/issuers/apis/push-provisioning/android/bounce-provisioning)
+- [App-to-App Verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv)
 - [Handling result callbacks](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#handling_result_callbacks)
 - [PaymentCredentialsGenerator interface](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#paymentcredentialsgenerator_interface)
 - [GeneratePaymentCredentialsRequest interface](https://developers.google.com/pay/issuers/apis/push-provisioning/android/wallet-operations#generatepaymentcredentialsrequest_interface)

@@ -15,19 +15,29 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel para el flujo de App-to-App Verification.
+ * ViewModel para el flujo de App-to-App Verification con biometría.
  *
  * Responsabilidades:
  * - Validar el payload y el caller al iniciar.
  * - Gestionar el estado de UI a través de [AppToAppUiState].
- * - Coordinar la autenticación simulada del cliente.
+ * - Coordinar la autenticación biométrica (antes de mostrar datos).
  * - Llamar al backend para activar el token.
  * - Emitir el [StepUpResult] final para que la Activity lo devuelva a Google Wallet.
  *
+ * Flujo:
+ * 1. Loading (validación inicial)
+ * 2. BiometricPrompt (biometría antes de mostrar datos)
+ * 3. AwaitingConfirmation (mostrando tarjeta, listo para activar)
+ * 4. Activating (llamando al backend)
+ *
+ * No hay un estado de UI para el resultado final: ni la activación exitosa, ni que el usuario
+ * cancele/decline la biometría, ni ningún [StepUpResult.Failure] (payload/caller inválido,
+ * biometría no disponible, error de red al activar) transicionan [uiState] a nada nuevo. En
+ * ninguno de esos casos hay una acción que el usuario deba tomar, así que el control se cede a
+ * Google Wallet directamente vía [finalResult] y la Activity cierra sola.
+ *
  * Docs:
  * https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv
- *
- * @property backendService Servicio para llamar a la API de activación de tokens.
  */
 class AppToAppViewModel(
     private val backendService: BackendService,
@@ -36,70 +46,90 @@ class AppToAppViewModel(
     private val _uiState = MutableStateFlow<AppToAppUiState>(AppToAppUiState.Loading)
     val uiState: StateFlow<AppToAppUiState> = _uiState.asStateFlow()
 
-    private val _finalResult = MutableSharedFlow<StepUpResult>(extraBufferCapacity = 1)
+    private val _finalResult = MutableSharedFlow<StepUpResult>(replay = 1, extraBufferCapacity = 0)
     val finalResult: SharedFlow<StepUpResult> = _finalResult.asSharedFlow()
+
+    private var currentPayload: VisaA2aPayload? = null
 
     /**
      * Inicializa el ViewModel con el payload y la validación del caller.
      *
-     * Si el payload es nulo o el caller no es válido, emite [StepUpResult.Failure]
-     * y finaliza el flujo sin mostrar la UI de autenticación.
+     * Si el payload es nulo o el caller no es válido, devuelve el control a Google Wallet
+     * directamente emitiendo [StepUpResult.Failure] por [finalResult], sin pasar por ningún
+     * estado de UI dedicado: no hay nada que el usuario pueda hacer ante un request inválido, así
+     * que no tiene sentido mostrarle una pantalla de error a la que nunca hay que reaccionar.
+     * Si todo es válido, pasa al estado BiometricPrompt para solicitar biometría.
      *
-     * @param payload El payload de Visa parseado desde Intent.EXTRA_TEXT, o null si hubo error.
-     * @param isValidCaller true si el caller es Google Wallet (com.google.android.gms).
+     * @param payload El payload de Visa parseado desde Intent.EXTRA_TEXT.
+     * @param isValidCaller true si el caller es Google Wallet.
      */
     fun init(payload: VisaA2aPayload?, isValidCaller: Boolean) {
         when {
             payload == null -> {
-                _uiState.value = AppToAppUiState.InvalidRequest("Invalid or missing payload")
                 _finalResult.tryEmit(StepUpResult.Failure("Invalid or missing payload"))
             }
             !isValidCaller -> {
-                _uiState.value = AppToAppUiState.InvalidRequest("Invalid caller: not Google Wallet")
                 _finalResult.tryEmit(StepUpResult.Failure("Invalid caller: not Google Wallet"))
             }
             else -> {
-                _uiState.value = AppToAppUiState.AwaitingAuthentication(payload)
+                currentPayload = payload
+                // Ir a estado de biometría - ANTES de mostrar cualquier dato
+                _uiState.value = AppToAppUiState.BiometricPrompt
             }
         }
     }
 
     /**
-     * Simula la confirmación de autenticación del cliente.
-     *
-     * En producción, aquí iría el flujo real de autenticación (login, biometría, PIN).
-     * Este ejemplo usa una simulación para mantener el foco en el cableado de A2A.
-     *
-     * Docs: ver guía interna google-pay-a2a.es.md
+     * Llamado cuando la autenticación biométrica es exitosa.
+     * Ahora podemos mostrar los datos de la tarjeta.
      */
-    fun onSimulatedAuthenticationConfirmed() {
-        val currentState = _uiState.value
-        if (currentState is AppToAppUiState.AwaitingAuthentication) {
-            _uiState.value = AppToAppUiState.Authenticated(currentState.payload)
+    fun onAuthenticationConfirmed() {
+        currentPayload?.let { payload ->
+            _uiState.value = AppToAppUiState.AwaitingConfirmation(payload)
         }
     }
 
     /**
-     * El cliente canceló la autenticación o eligió no continuar.
+     * Llamado cuando el usuario cancela la biometría desde el propio prompt nativo (el sistema ya
+     * ofrece su forma de cancelar, así que no hace falta un botón propio en la screen para esto).
      *
-     * No se llama a la API de activación y se devuelve [StepUpResult.Declined] a Google Wallet.
+     * No se llama a la API de activación. El control se cede a Google Wallet directamente vía
+     * [finalResult], sin pasar por ningún estado de UI dedicado.
      */
     fun onAuthenticationDeclined() {
-        _uiState.value = AppToAppUiState.Finished(StepUpResult.Declined)
         _finalResult.tryEmit(StepUpResult.Declined)
+    }
+
+    /**
+     * Llamado cuando no hay biometría disponible en el dispositivo.
+     *
+     * Esto es un error técnico, no algo que el usuario pueda resolver desde esta pantalla: no
+     * cambiamos [uiState] a un estado de error dedicado, simplemente devolvemos el control a
+     * Google Wallet emitiendo [StepUpResult.Failure] por [finalResult].
+     */
+    fun onBiometricNotAvailable() {
+        _finalResult.tryEmit(StepUpResult.Failure("Biometric authentication not available"))
+    }
+
+    /**
+     * Llamado cuando hay un error técnico en la biometría. Ver [onBiometricNotAvailable].
+     */
+    fun onBiometricError(message: String) {
+        _finalResult.tryEmit(StepUpResult.Failure(message))
     }
 
     /**
      * Activa el token llamando al backend de Pomelo.
      *
-     * En éxito devuelve [StepUpResult.Approved] a Google Wallet.
-     * En error devuelve [StepUpResult.Failure].
+     * Tanto en éxito como en error, el resultado se cede directamente a Google Wallet vía
+     * [finalResult] sin pasar por un estado de UI dedicado: no hay ninguna confirmación ni acción
+     * que el usuario deba tomar después de activar, así que no tiene sentido una pantalla
+     * intermedia entre "Activando..." y que la Activity cierre.
      */
     fun onActivate() {
-        val currentState = _uiState.value
-        if (currentState !is AppToAppUiState.Authenticated) return
+        val payload = currentPayload
+        if (payload == null || _uiState.value !is AppToAppUiState.AwaitingConfirmation) return
 
-        val payload = currentState.payload
         _uiState.value = AppToAppUiState.Activating(payload)
 
         viewModelScope.launch {
@@ -108,11 +138,9 @@ class AppToAppViewModel(
                     tokenId = payload.tokenReferenceID.orEmpty(),
                     motive = "APP_TO_APP_ACTIVATION",
                 )
-                _uiState.value = AppToAppUiState.Finished(StepUpResult.Approved)
                 _finalResult.tryEmit(StepUpResult.Approved)
             } catch (e: Exception) {
                 val message = e.message ?: "Failed to activate token"
-                _uiState.value = AppToAppUiState.Finished(StepUpResult.Failure(message))
                 _finalResult.tryEmit(StepUpResult.Failure(message))
             }
         }

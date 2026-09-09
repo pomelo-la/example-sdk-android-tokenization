@@ -165,48 +165,54 @@ Referencia oficial: [Bounce Provisioning](https://developers.google.com/pay/issu
 
 App-to-App Verification (también conocido como App-to-App IDV) permite a Google Wallet invocar directamente la app del emisor cuando necesita verificar la identidad del titular antes de activar un token (Yellow Path). En lugar de enviar un OTP por SMS/email, Google Wallet lanza esta app con el payload de Visa en Base64URL.
 
-La integración tiene cuatro partes:
+La integración tiene cinco partes:
 
 1. **Manifest**: se declara un `intent-filter` con la acción `com.example.example_google_upp.a2a` (formato fijo definido por Visa) y la categoría `DEFAULT` en `AppToAppVerificationActivity`. Google Wallet usa esta acción para invocar la app emisora.
-2. **AppToAppVerificationActivity**: recibe el Intent, parsea el payload de Visa desde `Intent.EXTRA_TEXT`, valida que el caller sea `com.google.android.gms`, y coordina el flujo de autenticación y activación.
-3. **AppToAppViewModel**: gestiona el estado de UI ([AppToAppUiState]), simula la autenticación del cliente (en producción aquí iría login/biometría real), y llama a `BackendService.activateToken()` para activar el token en Pomelo.
-4. **Resultado**: tras la activación (o si el usuario cancela), se devuelve el resultado a Google Wallet vía `setResult(RESULT_OK)` con el extra `STEP_UP_RESPONSE` (`"approved"`, `"declined"` o `"failure"`).
+2. **BiometricAuthenticator**: maneja la autenticación biométrica usando `BiometricPrompt`. La biometría se muestra ANTES de revelar cualquier dato de la tarjeta, cumpliendo con los requisitos de seguridad de Visa.
+3. **AppToAppVerificationActivity**: recibe el Intent, parsea el payload de Visa desde `Intent.EXTRA_TEXT`, valida que el caller sea `com.google.android.gms`, muestra el prompt de biometría, y coordina el flujo de activación.
+4. **AppToAppViewModel**: gestiona el estado de UI ([AppToAppUiState]), desde `BiometricPrompt` hasta `Finished`, y llama a `BackendService.activateToken()` para activar el token en Pomelo.
+5. **Resultado**: tras la activación (o si el usuario cancela la biometría o el flujo), se devuelve el resultado a Google Wallet vía `setResult(RESULT_OK)` con el extra `STEP_UP_RESPONSE` (`"approved"`, `"declined"` o `"failure"`).
 
 ```mermaid
 sequenceDiagram
-    actor User
+    participant User as Tarjetahabiente
     participant GW as Google Wallet
     participant A2A as AppToAppVerificationActivity
+    participant Bio as BiometricPrompt
     participant VM as AppToAppViewModel
-    participant BS as BackendService
+    participant Backend as Backend App
     participant Pomelo as Pomelo
 
     User->>GW: Agrega tarjeta manualmente
     Note over GW: Yellow Path: requiere verificación
     GW->>A2A: Intent con action .a2a y payload Base64URL
     A2A->>A2A: Parsea payload y valida caller
-    A2A->>VM: init(payload, isValidCaller)
-    VM->>A2A: Estado: AwaitingAuthentication
+    A2A->>Bio: authenticate()
+    Note over Bio: Biometría ANTES de mostrar datos
+    User->>Bio: Huella/Reconocimiento facial
+    Bio-->>A2A: onAuthenticationSucceeded()
+    A2A->>VM: onAuthenticationConfirmed()
+    VM->>A2A: Estado: AwaitingConfirmation
     A2A->>User: Muestra •••• •••• •••• 1234
-    User->>A2A: Simular autenticación
-    A2A->>VM: onSimulatedAuthenticationConfirmed()
-    VM->>A2A: Estado: Authenticated
-    User->>A2A: Presiona "Activar"
+    User->>A2A: Presiona "Activar tarjeta"
     A2A->>VM: onActivate()
     VM->>A2A: Estado: Activating
-    VM->>BS: activateToken(tokenId, APP_TO_APP_ACTIVATION)
-    BS->>Pomelo: POST /tokens/{id}/activate
-    Pomelo-->>BS: 202 Accepted
-    BS-->>VM: Éxito
+    VM->>Backend: activateToken(tokenId, APP_TO_APP_ACTIVATION)
+    Backend->>Pomelo: POST /tokens/{id}/activate
+    Pomelo-->>Backend: 202 Accepted
+    Backend-->>VM: Éxito
     VM->>A2A: Estado: Finished(Approved)
-    VM->>A2A: Emite finalResult
     A2A->>GW: setResult(STEP_UP_RESPONSE: "approved")
 ```
 
-Nota importante: la autenticación del cliente (login, biometría, PIN) queda a criterio del emisor. Este ejemplo usa una simulación para mantener el foco en el cableado de A2A; en producción debe reemplazarse por el mecanismo real de autenticación.
+**Flujo de cancelación:**
+- Si el usuario cancela la biometría → `StepUpResult.Declined`
+- Si no hay biometría disponible → `StepUpResult.Failure`
+- Si hay error en biometría → `StepUpResult.Failure`
 
 Referencias oficiales:
 - [App-to-App Verification](https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv)
+- [BiometricPrompt](https://developer.android.com/training/sign-in/biometric-auth)
 - Guía interna de Pomelo: `pomelo-docs/docs/modules/tokenization/google-pay-a2a.es.md`
 
 ## Referencias del SDK usadas por la app

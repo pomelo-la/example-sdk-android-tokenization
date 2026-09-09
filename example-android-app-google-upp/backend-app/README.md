@@ -13,6 +13,7 @@ Backend de ejemplo para integrar Pomelo Push Provisioning con Google UPP desde u
 - `GET /users/:id`
 - `POST /push-provisioning/mastercard/google-pay`
 - `POST /push-provisioning/visa/google-pay`
+- `POST /tokens/:id/activate`
 
 ## Variables de entorno
 
@@ -134,3 +135,17 @@ Respuesta:
   "google_opc": "eyJmdW5kaW5 ...."
 }
 ```
+
+### Activar token (App-to-App Verification)
+
+Usado por el flujo A2A (Yellow Path) para activar un token luego de la verificacion biometrica en la app. Hace proxy hacia `POST /tokenization/v1/tokens/:id/activate` en Pomelo.
+
+```bash
+curl -X POST "http://localhost:3000/tokens/tok-123/activate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "motive": "APP_TO_APP_ACTIVATION"
+  }'
+```
+
+Respuesta: `202 Accepted` con el body devuelto por Pomelo.

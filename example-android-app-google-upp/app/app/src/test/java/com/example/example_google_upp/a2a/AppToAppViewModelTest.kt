@@ -11,10 +11,11 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.advanceUntilIdle
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -33,9 +34,11 @@ class AppToAppViewModelTest {
         walletAccountID = "wallet-456"
     )
 
+    private val testDispatcher = StandardTestDispatcher()
+
     @Before
     fun setup() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        Dispatchers.setMain(testDispatcher)
     }
 
     @After
@@ -44,121 +47,202 @@ class AppToAppViewModelTest {
     }
 
     @Test
-    fun `payload invalido al iniciar emite Failure sin pasar por autenticacion`() = runTest {
+    fun `payload invalido al iniciar emite Failure sin pasar por biometria ni por un estado de UI dedicado`() =
+        runTest(testDispatcher) {
+            val viewModel = AppToAppViewModel(createService())
+
+            viewModel.init(payload = null, isValidCaller = true)
+
+            // Avanzar hasta que todas las coroutines terminen
+            advanceUntilIdle()
+
+            // No hay un estado de error dedicado: el control vuelve a Google Wallet directamente
+            // por finalResult, sin que uiState transicione a nada distinto de Loading.
+            assertTrue(viewModel.uiState.value is AppToAppUiState.Loading)
+
+            val finalResult = viewModel.finalResult.first()
+            assertTrue(finalResult is StepUpResult.Failure)
+            assertEquals("Invalid or missing payload", (finalResult as StepUpResult.Failure).message)
+        }
+
+    @Test
+    fun `caller invalido al iniciar emite Failure sin pasar por biometria ni por un estado de UI dedicado`() =
+        runTest(testDispatcher) {
+            val viewModel = AppToAppViewModel(createService())
+
+            viewModel.init(payload = validPayload, isValidCaller = false)
+
+            // Avanzar hasta que todas las coroutines terminen
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value is AppToAppUiState.Loading)
+
+            val finalResult = viewModel.finalResult.first()
+            assertTrue(finalResult is StepUpResult.Failure)
+            assertEquals("Invalid caller: not Google Wallet", (finalResult as StepUpResult.Failure).message)
+        }
+
+    @Test
+    fun `payload y caller validos inicializan en BiometricPrompt`() = runTest(testDispatcher) {
         val viewModel = AppToAppViewModel(createService())
 
-        viewModel.init(payload = null, isValidCaller = true)
+        viewModel.init(payload = validPayload, isValidCaller = true)
+
+        // Avanzar hasta que todas las coroutines terminen
+        advanceUntilIdle()
 
         val uiState = viewModel.uiState.value
-        assertTrue(uiState is AppToAppUiState.InvalidRequest)
-        assertEquals("Invalid or missing payload", (uiState as AppToAppUiState.InvalidRequest).reason)
-
-        val finalResult = viewModel.finalResult.first()
-        assertTrue(finalResult is StepUpResult.Failure)
-        assertEquals("Invalid or missing payload", (finalResult as StepUpResult.Failure).message)
+        assertTrue(uiState is AppToAppUiState.BiometricPrompt)
     }
 
     @Test
-    fun `caller invalido al iniciar emite Failure sin pasar por autenticacion`() = runTest {
-        val viewModel = AppToAppViewModel(createService())
-
-        viewModel.init(payload = validPayload, isValidCaller = false)
-
-        val uiState = viewModel.uiState.value
-        assertTrue(uiState is AppToAppUiState.InvalidRequest)
-        assertEquals("Invalid caller: not Google Wallet", (uiState as AppToAppUiState.InvalidRequest).reason)
-
-        val finalResult = viewModel.finalResult.first()
-        assertTrue(finalResult is StepUpResult.Failure)
-        assertEquals("Invalid caller: not Google Wallet", (finalResult as StepUpResult.Failure).message)
-    }
-
-    @Test
-    fun `payload y caller validos inicializan en AwaitingAuthentication`() = runTest {
+    fun `onAuthenticationConfirmed despues de biometria exitosa pasa a AwaitingConfirmation`() = runTest(testDispatcher) {
         val viewModel = AppToAppViewModel(createService())
 
         viewModel.init(payload = validPayload, isValidCaller = true)
 
+        // Avanzar hasta que todas las coroutines terminen
+        advanceUntilIdle()
+
+        viewModel.onAuthenticationConfirmed()
+
         val uiState = viewModel.uiState.value
-        assertTrue(uiState is AppToAppUiState.AwaitingAuthentication)
-        assertEquals(validPayload, (uiState as AppToAppUiState.AwaitingAuthentication).payload)
+        assertTrue(uiState is AppToAppUiState.AwaitingConfirmation)
+        assertEquals(validPayload, (uiState as AppToAppUiState.AwaitingConfirmation).payload)
     }
 
     @Test
-    fun `onSimulatedAuthenticationConfirmed pasa a Authenticated`() = runTest {
+    fun `onAuthenticationDeclined emite Declined sin pasar por un estado de UI dedicado`() = runTest(testDispatcher) {
         val viewModel = AppToAppViewModel(createService())
 
         viewModel.init(payload = validPayload, isValidCaller = true)
-        viewModel.onSimulatedAuthenticationConfirmed()
 
-        val uiState = viewModel.uiState.value
-        assertTrue(uiState is AppToAppUiState.Authenticated)
-        assertEquals(validPayload, (uiState as AppToAppUiState.Authenticated).payload)
-    }
+        // Avanzar hasta que todas las coroutines terminen
+        advanceUntilIdle()
 
-    @Test
-    fun `onAuthenticationDeclined emite Declined sin llamar a backend`() = runTest {
-        val service = createService()
-        val viewModel = AppToAppViewModel(service)
-
-        viewModel.init(payload = validPayload, isValidCaller = true)
         viewModel.onAuthenticationDeclined()
 
-        val uiState = viewModel.uiState.value
-        assertTrue(uiState is AppToAppUiState.Finished)
-        assertEquals(StepUpResult.Declined, (uiState as AppToAppUiState.Finished).result)
+        // Avanzar nuevamente después de onAuthenticationDeclined
+        advanceUntilIdle()
+
+        // uiState se queda en BiometricPrompt (nunca transiciona a nada nuevo): el control vuelve
+        // a Google Wallet directamente por finalResult.
+        assertTrue(viewModel.uiState.value is AppToAppUiState.BiometricPrompt)
 
         val finalResult = viewModel.finalResult.first()
         assertEquals(StepUpResult.Declined, finalResult)
     }
 
     @Test
-    fun `flujo feliz autenticacion exitosa y activacion exitosa emite Approved`() = runTest {
-        val service = createService(activateTokenSuccess = true)
-        val viewModel = AppToAppViewModel(service)
+    fun `onBiometricNotAvailable emite Failure sin pasar por un estado de UI dedicado`() = runTest(testDispatcher) {
+        val viewModel = AppToAppViewModel(createService())
 
         viewModel.init(payload = validPayload, isValidCaller = true)
-        viewModel.onSimulatedAuthenticationConfirmed()
-        viewModel.onActivate()
 
-        val uiState = viewModel.uiState.value
-        assertTrue(uiState is AppToAppUiState.Finished)
-        assertEquals(StepUpResult.Approved, (uiState as AppToAppUiState.Finished).result)
+        // Avanzar hasta que todas las coroutines terminen
+        advanceUntilIdle()
 
-        val finalResult = viewModel.finalResult.first()
-        assertEquals(StepUpResult.Approved, finalResult)
-    }
+        viewModel.onBiometricNotAvailable()
 
-    @Test
-    fun `onActivate con error del backend emite Failure`() = runTest {
-        val service = createService(activateTokenSuccess = false)
-        val viewModel = AppToAppViewModel(service)
+        // Avanzar nuevamente después del método
+        advanceUntilIdle()
 
-        viewModel.init(payload = validPayload, isValidCaller = true)
-        viewModel.onSimulatedAuthenticationConfirmed()
-        viewModel.onActivate()
+        // uiState se queda en BiometricPrompt (nunca transiciona a Finished): el control vuelve a
+        // Google Wallet directamente por finalResult.
+        assertTrue(viewModel.uiState.value is AppToAppUiState.BiometricPrompt)
 
-        val uiState = viewModel.uiState.value
-        assertTrue(uiState is AppToAppUiState.Finished)
-        val result = (uiState as AppToAppUiState.Finished).result
+        val result = viewModel.finalResult.first()
         assertTrue(result is StepUpResult.Failure)
+        assertEquals("Biometric authentication not available", (result as StepUpResult.Failure).message)
     }
 
     @Test
-    fun `estado Activating durante la llamada al backend`() = runTest {
-        // Crear un mock engine que no responde inmediatamente
+    fun `onBiometricError emite Failure con mensaje sin pasar por un estado de UI dedicado`() =
+        runTest(testDispatcher) {
+            val viewModel = AppToAppViewModel(createService())
+
+            viewModel.init(payload = validPayload, isValidCaller = true)
+
+            // Avanzar hasta que todas las coroutines terminen
+            advanceUntilIdle()
+
+            viewModel.onBiometricError("Hardware unavailable")
+
+            // Avanzar nuevamente después del método
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value is AppToAppUiState.BiometricPrompt)
+
+            val result = viewModel.finalResult.first()
+            assertTrue(result is StepUpResult.Failure)
+            assertEquals("Hardware unavailable", (result as StepUpResult.Failure).message)
+        }
+
+    @Test
+    fun `flujo feliz biometria exitosa y activacion exitosa emite Approved sin pasar por un estado de UI dedicado`() =
+        runTest(testDispatcher) {
+            val service = createService(activateTokenSuccess = true)
+            val viewModel = AppToAppViewModel(service)
+
+            viewModel.init(payload = validPayload, isValidCaller = true)
+
+            // Avanzar hasta que todas las coroutines terminen
+            advanceUntilIdle()
+
+            viewModel.onAuthenticationConfirmed()
+            viewModel.onActivate()
+
+            // El MockEngine de Ktor ejecuta la request en Dispatchers.IO (un hilo real), no en
+            // testDispatcher, así que advanceUntilIdle() no alcanza para esperarlo de forma
+            // determinística. finalResult.first() sí suspende hasta que la corrutina real termine.
+            val finalResult = viewModel.finalResult.first()
+            assertEquals(StepUpResult.Approved, finalResult)
+
+            // uiState se queda en Activating (nunca transiciona a nada nuevo): el control vuelve a
+            // Google Wallet directamente por finalResult.
+            assertTrue(viewModel.uiState.value is AppToAppUiState.Activating)
+        }
+
+    @Test
+    fun `onActivate con error del backend emite Failure sin pasar por un estado de UI dedicado`() =
+        runTest(testDispatcher) {
+            val service = createService(activateTokenSuccess = false)
+            val viewModel = AppToAppViewModel(service)
+
+            viewModel.init(payload = validPayload, isValidCaller = true)
+
+            // Avanzar hasta que todas las coroutines terminen
+            advanceUntilIdle()
+
+            viewModel.onAuthenticationConfirmed()
+            viewModel.onActivate()
+
+            // Ver comentario en el test anterior: hay que esperar la señal real, no virtual time.
+            val finalResult = viewModel.finalResult.first()
+            assertTrue(finalResult is StepUpResult.Failure)
+
+            // uiState se queda en Activating (nunca transiciona a Finished): el control vuelve a
+            // Google Wallet directamente por finalResult.
+            assertTrue(viewModel.uiState.value is AppToAppUiState.Activating)
+        }
+
+    @Test
+    fun `estado Activating durante la llamada al backend`() = runTest(testDispatcher) {
         val mockEngine = MockEngine {
-            // No respondemos inmediatamente
             respond(content = "", status = HttpStatusCode.Accepted)
         }
         val service = BackendService.createForTest(mockEngine)
         val viewModel = AppToAppViewModel(service)
 
         viewModel.init(payload = validPayload, isValidCaller = true)
-        viewModel.onSimulatedAuthenticationConfirmed()
+
+        // Avanzar hasta que todas las coroutines terminen
+        advanceUntilIdle()
+
+        viewModel.onAuthenticationConfirmed()
         viewModel.onActivate()
 
-        // Estado debería ser Activating inmediatamente después de llamar onActivate
+        // Verificar el estado inmediatamente después de onActivate (no esperamos que complete)
         val uiState = viewModel.uiState.value
         assertTrue(uiState is AppToAppUiState.Activating)
     }
@@ -177,6 +261,32 @@ class AppToAppViewModelTest {
             }
         }
         return BackendService.createForTest(mockEngine)
+    }
+
+    // Test para verificar que el backend es llamado correctamente
+    @Test
+    fun `onActivate llama al backend con el tokenId correcto`() = runTest(testDispatcher) {
+        val mockEngine = MockEngine { request ->
+            // Verificar que se llama al endpoint correcto
+            assertTrue(request.url.encodedPath.contains("/tokens/TOKEN-789/activate"))
+            respond(content = "{}", status = HttpStatusCode.Accepted)
+        }
+        val service = BackendService.createForTest(mockEngine)
+        val viewModel = AppToAppViewModel(service)
+
+        viewModel.init(payload = validPayload, isValidCaller = true)
+        advanceUntilIdle()
+
+        viewModel.onAuthenticationConfirmed()
+        viewModel.onActivate()
+
+        // Ver comentario en "flujo feliz...": hay que esperar la señal real, no virtual time.
+        val finalResult = viewModel.finalResult.first()
+        assertEquals(StepUpResult.Approved, finalResult)
+
+        // uiState se queda en Activating (nunca transiciona a nada nuevo): el control vuelve a
+        // Google Wallet directamente por finalResult.
+        assertTrue(viewModel.uiState.value is AppToAppUiState.Activating)
     }
 }
 

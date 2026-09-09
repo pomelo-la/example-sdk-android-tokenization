@@ -4,7 +4,12 @@ import android.content.Intent
 import com.example.example_google_upp.a2a.models.StepUpResult
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class StepUpResultResolverTest {
 
     @Test

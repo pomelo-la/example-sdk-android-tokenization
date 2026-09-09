@@ -1,8 +1,8 @@
 package com.example.example_google_upp.a2a.models
 
-import android.util.Base64
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
+import java.util.Base64
 
 /**
  * Payload de Visa para App-to-App Verification (A2A).
@@ -31,6 +31,8 @@ data class VisaA2aPayload(
         /**
          * Parsea el payload de Visa desde el string Base64URL recibido en Intent.EXTRA_TEXT.
          *
+         * Usa Java Base64 que está disponible tanto en Android (API 26+) como en JVM de tests.
+         *
          * @param extraText El valor de Intent.EXTRA_TEXT (JSON en Base64URL), o null si no está presente.
          * @param gson Instancia de Gson para el parseo (por defecto crea una nueva).
          * @return El [VisaA2aPayload] parseado, o null si el input es inválido o nulo.
@@ -41,11 +43,15 @@ data class VisaA2aPayload(
             }
 
             return try {
-                val decoded = Base64.decode(extraText, Base64.URL_SAFE or Base64.NO_WRAP)
+                // Usar Java Base64 URL decoder (disponible en Android API 26+ y JVM)
+                val decoded = Base64.getUrlDecoder().decode(extraText)
                 val json = String(decoded, Charsets.UTF_8)
                 gson.fromJson(json, VisaA2aPayload::class.java)
+            } catch (e: IllegalArgumentException) {
+                // Base64 inválido
+                null
             } catch (e: Exception) {
-                // Base64 inválido o JSON malformado
+                // JSON malformado u otros errores
                 null
             }
         }

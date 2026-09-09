@@ -1,10 +1,19 @@
 package com.example.example_google_upp.a2a.models
 
 /**
- * Estados de UI para el flujo de App-to-App Verification.
+ * Estados de UI para el flujo de App-to-App Verification con biometría.
  *
- * Representa las distintas fases del flujo desde que Google Wallet invoca la Activity
- * hasta que se devuelve el resultado.
+ * El flujo es:
+ * 1. Loading (validando payload y caller)
+ * 2. BiometricPrompt (mostrando biometría - ANTES de mostrar datos)
+ * 3. AwaitingConfirmation (mostrando tarjeta, esperando confirmación para activar)
+ * 4. Activating (llamando al backend)
+ *
+ * No hay un estado final de UI: ni la activación exitosa, ni que el usuario cancele/decline, ni
+ * los errores (payload/caller inválido, biometría no disponible, error de red) tienen una pantalla
+ * dedicada. En todos esos casos no hay ninguna acción que el usuario deba tomar, así que el
+ * ViewModel cede el control a Google Wallet directamente (ver `AppToAppViewModel.finalResult`) y
+ * la Activity cierra sin transicionar [AppToAppUiState] a nada nuevo.
  */
 sealed interface AppToAppUiState {
     /**
@@ -13,28 +22,18 @@ sealed interface AppToAppUiState {
     data object Loading : AppToAppUiState
 
     /**
-     * Request inválido: payload ausente/inválido o caller no es Google Wallet.
-     * La Activity finalizará con [StepUpResult.Failure].
+     * Mostrando prompt de biometría. No se muestra ningún dato de la tarjeta aún.
      */
-    data class InvalidRequest(val reason: String) : AppToAppUiState
+    data object BiometricPrompt : AppToAppUiState
 
     /**
-     * Esperando autenticación del cliente. Muestra los últimos 4 dígitos de la tarjeta.
+     * Biometría exitosa, mostrando los datos de la tarjeta y esperando
+     * confirmación para activar.
      */
-    data class AwaitingAuthentication(val payload: VisaA2aPayload) : AppToAppUiState
-
-    /**
-     * Cliente autenticado, listo para activar el token.
-     */
-    data class Authenticated(val payload: VisaA2aPayload) : AppToAppUiState
+    data class AwaitingConfirmation(val payload: VisaA2aPayload) : AppToAppUiState
 
     /**
      * Activando el token (llamando al backend).
      */
     data class Activating(val payload: VisaA2aPayload) : AppToAppUiState
-
-    /**
-     * Flujo finalizado, listo para cerrar la Activity y devolver el resultado a Google Wallet.
-     */
-    data class Finished(val result: StepUpResult) : AppToAppUiState
 }

@@ -50,23 +50,42 @@ internal constructor(
 
     suspend fun getCardById(cardId: String): Card = get<CardDto>("cards/$cardId").toDomain()
 
+    /**
+     * Activa un token de tarjeta tokenizada.
+     *
+     * Este endpoint se usa en el flujo de App-to-App Verification (A2A) cuando Google Wallet
+     * necesita confirmar la identidad del titular antes de activar el token (Yellow Path).
+     *
+     * @param tokenId El ID del token a activar (generalmente el tokenReferenceID del payload A2A).
+     * @param motive El motivo de la activación. Por defecto "APP_TO_APP_ACTIVATION".
+     *
+     * Docs:
+     * https://developers.google.com/pay/issuers/tsp-integration/app-to-app-idv
+     */
+    suspend fun activateToken(tokenId: String, motive: String = "APP_TO_APP_ACTIVATION") {
+        post<Unit>("tokens/$tokenId/activate", mapOf("motive" to motive))
+    }
+
     private suspend inline fun <reified T> get(path: String): T =
         gson.fromJson(client.get(url(path)).bodyAsText(), T::class.java)
 
-    private suspend inline fun <reified T> post(path: String, payload: Any): T =
-        gson.fromJson(
-            client
-                .post(url(path)) {
-                    setBody(
-                        TextContent(
-                            text = gson.toJson(payload),
-                            contentType = ContentType.Application.Json,
-                        )
-                    )
-                }
-                .bodyAsText(),
-            T::class.java,
-        )
+    private suspend inline fun <reified T> post(path: String, payload: Any): T {
+        val response = client.post(url(path)) {
+            setBody(
+                TextContent(
+                    text = gson.toJson(payload),
+                    contentType = ContentType.Application.Json,
+                )
+            )
+        }
+
+        // Verificar que la respuesta sea exitosa (2xx)
+        if (response.status.value !in 200..299) {
+            throw Exception("HTTP ${response.status.value}: ${response.bodyAsText()}")
+        }
+
+        return gson.fromJson(response.bodyAsText(), T::class.java)
+    }
 
     private fun url(path: String): String = "${baseUrl.trimEnd('/')}/$path"
 

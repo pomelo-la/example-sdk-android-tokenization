@@ -28,14 +28,19 @@ La app Android demuestra la integracion de Tap And Pay del lado cliente:
 - generar credenciales de pago mediante `PomeloCredentialsGenerator`
 - manejar el resultado devuelto por Google Wallet
 - soportar Bounce Provisioning, para que Google Wallet pueda redirigir al usuario a esta app y agregar la tarjeta sin navegacion adicional
+- soportar App-to-App Verification (A2A) para el flujo Yellow Path de Google Wallet, con autenticación biométrica antes de mostrar cualquier dato de la tarjeta
 
 La app backend demuestra la parte del servidor requerida por el ejemplo:
 
 - exponer endpoints de consulta de tarjeta y usuario
 - exponer endpoints de push provisioning para Mastercard y Visa
 - hacer proxy de la solicitud de provisioning hacia Pomelo y devolver datos OPC al flujo cliente
+- exponer el endpoint de activacion de token consumido por el flujo A2A tras la verificacion biometrica
 
-## Diagrama de secuencia
+## Diagrama de secuencia: Push Provisioning
+
+Este es el flujo principal, disparado por el usuario desde la app al presionar "Agregar a Billetera de Google" (incluye tambien la variante Bounce Provisioning, donde Google Wallet es quien lanza la app).
+
 ```mermaid
 sequenceDiagram
     participant User as Tarjetahabiente
@@ -66,6 +71,44 @@ sequenceDiagram
     App-->>User: Muestra la confirmación
 
 ```
+
+## Diagrama de secuencia: App-to-App Verification (A2A)
+
+Este es un flujo distinto e independiente del anterior: no lo inicia el usuario desde esta app, sino que Google Wallet lanza esta app cuando necesita verificar la identidad del titular antes de activar un token (Yellow Path), en lugar de enviar un OTP por SMS/email.
+
+```mermaid
+sequenceDiagram
+    participant User as Tarjetahabiente
+    participant GW as Google Wallet
+    participant A2A as AppToAppVerificationActivity
+    participant Bio as BiometricPrompt
+    participant VM as AppToAppViewModel
+    participant Backend as Backend App
+    participant Pomelo as Pomelo
+
+    User->>GW: Agrega tarjeta manualmente
+    Note over GW: Yellow Path: requiere verificación
+    GW->>A2A: Intent con action .a2a y payload Base64URL
+    A2A->>A2A: Parsea payload y valida caller
+    A2A->>Bio: authenticate()
+    Note over Bio: Biometría ANTES de mostrar datos
+    User->>Bio: Huella/Reconocimiento facial
+    Bio-->>A2A: onAuthenticationSucceeded()
+    A2A->>VM: onAuthenticationConfirmed()
+    VM->>A2A: Estado: AwaitingConfirmation
+    A2A->>User: Muestra •••• •••• •••• 1234
+    User->>A2A: Presiona "Activar tarjeta"
+    A2A->>VM: onActivate()
+    VM->>A2A: Estado: Activating
+    VM->>Backend: activateToken(tokenId, APP_TO_APP_ACTIVATION)
+    Backend->>Pomelo: POST /tokens/{id}/activate
+    Pomelo-->>Backend: 202 Accepted
+    Backend-->>VM: Éxito
+    VM->>A2A: Estado: Finished(Approved)
+    A2A->>GW: setResult(STEP_UP_RESPONSE: "approved")
+```
+
+Para el detalle completo de este flujo (biometria, manejo de cancelacion/error, formato del payload de Visa) mira la seccion [App-to-App Verification (A2A)](app/README.md#app-to-app-verification-a2a) en `app/README.md`.
 
 ## Segui leyendo
 

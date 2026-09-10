@@ -1,6 +1,7 @@
 package com.example.example_google_upp.di
 
 import com.example.example_google_upp.BuildConfig
+import com.example.example_google_upp.a2a.AppToAppViewModel
 import com.example.example_google_upp.data.BackendService
 import com.example.example_google_upp.ui.CardSearchViewModel
 import com.example.example_google_upp.wallet.TapAndPayService
@@ -15,4 +16,5 @@ val appModule = module {
     single { TapAndPay.getClient(androidContext()) }
     single<WalletProvisioningGateway> { TapAndPayService(get(), get()) }
     viewModelOf(::CardSearchViewModel)
+    viewModelOf(::AppToAppViewModel)
 }

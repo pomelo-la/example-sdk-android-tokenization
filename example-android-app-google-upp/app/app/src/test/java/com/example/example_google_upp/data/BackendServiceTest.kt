@@ -339,6 +339,50 @@ class BackendServiceTest {
             assertEquals("Backend response is missing legal_address.region", error?.message)
         }
 
+    @Test
+    fun `activateToken sends correct body and succeeds on 202`() = runTest {
+        val service = createService { request: HttpRequestData ->
+            assertEquals(HttpMethod.Post, request.method)
+            assertEquals("/tokens/TOKEN-123/activate", request.url.encodedPath)
+
+            val body = requestBody(request)
+            assertEquals("""{"motive":"APP_TO_APP_ACTIVATION"}""", body)
+
+            respondJson("""{"status":"activated"}""".trimIndent(), status = HttpStatusCode.Accepted)
+        }
+
+        // No debería lanzar excepción
+        service.activateToken(tokenId = "TOKEN-123", motive = "APP_TO_APP_ACTIVATION")
+    }
+
+    @Test
+    fun `activateToken with custom motive sends correct motive`() = runTest {
+        val service = createService { request: HttpRequestData ->
+            val body = requestBody(request)
+            assertEquals("""{"motive":"CUSTOM_MOTIVE"}""", body)
+
+            respondJson("""{"status":"activated"}""".trimIndent(), status = HttpStatusCode.Accepted)
+        }
+
+        service.activateToken(tokenId = "TOKEN-456", motive = "CUSTOM_MOTIVE")
+    }
+
+    @Test
+    fun `activateToken propagates error on failure response`() = runTest {
+        val service = createService { request: HttpRequestData ->
+            respond(
+                content = """{"error":"Token not found"}""",
+                status = HttpStatusCode.NotFound
+            )
+        }
+
+        val error = captureFailure {
+            service.activateToken(tokenId = "INVALID-TOKEN", motive = "APP_TO_APP_ACTIVATION")
+        }
+
+        assertNotNull(error)
+    }
+
     private fun createService(
         handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData
     ): BackendService =
@@ -355,10 +399,10 @@ class BackendServiceTest {
     private fun requestBodyDto(request: HttpRequestData): ProvisioningRequestDto =
         gson.fromJson(requestBody(request), ProvisioningRequestDto::class.java)
 
-    private fun MockRequestHandleScope.respondJson(body: String): HttpResponseData =
+    private fun MockRequestHandleScope.respondJson(body: String, status: HttpStatusCode = HttpStatusCode.OK): HttpResponseData =
         respond(
             content = body,
-            status = HttpStatusCode.OK,
+            status = status,
             headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
         )
 
